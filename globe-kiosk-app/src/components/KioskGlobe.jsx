@@ -1,4 +1,13 @@
-// KioskGlobe.jsx - Dedicated kiosk display component
+// Get token from environment
+  const mapboxToken = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN;
+
+  // Debug token info
+  console.log('🔑 Kiosk Token info:', {
+    exists: !!mapboxToken,
+    length: mapboxToken?.length,
+    valid: mapboxToken?.startsWith('pk.'),
+    preview: mapboxToken?.substring(0, 20) + '...'
+  });// KioskGlobe.jsx - Fixed centering issue
 import React, { useRef, useState, useCallback, useEffect, useMemo } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
@@ -34,7 +43,7 @@ const KioskGlobe = ({
     preview: mapboxToken?.substring(0, 20) + '...'
   });
 
-  // Smooth rotation animation
+  // Smooth rotation animation - PRESERVE ZOOM
   const startAnimation = useCallback(() => {
     if (!mapInstance.current) return;
     
@@ -44,11 +53,12 @@ const KioskGlobe = ({
       if (!mapInstance.current) return;
 
       const center = mapInstance.current.getCenter();
+      const currentZoom = mapInstance.current.getZoom(); // PRESERVE current zoom
       const newLng = center.lng + 0.1; // Slightly faster rotation for kiosk
       
       mapInstance.current.easeTo({
         center: [newLng, center.lat],
-        zoom: 2,
+        zoom: currentZoom, // EXPLICITLY preserve zoom level
         duration: 100,
         easing: t => t
       });
@@ -80,14 +90,14 @@ const KioskGlobe = ({
       const map = new mapboxgl.Map({
         container: mapContainer.current,
         style: 'mapbox://styles/okekec21/cmd63rz9p00sd01qn2kcefwj0',
-        center: [0, 20],
-        zoom: 2,
-        pitch: 15,
+        center: [0, 0], // Perfect center - 0 latitude for vertical centering
+        zoom: 1.8, // Base zoom level - will be adjusted on resize
+        pitch: 0, // No tilt for perfect centered view
         bearing: 0,
         projection: 'globe',
         antialias: true,
         maxZoom: 8.5,
-        minZoom: 1.5,
+        minZoom: 0.1, // LOWERED from 0.5 to allow very low zoom levels
         maxPitch: 75,
         dragRotate: false,
         dragPan: false,
@@ -97,7 +107,8 @@ const KioskGlobe = ({
         keyboard: false,
         attributionControl: false,
         renderWorldCopies: false,
-        trackResize: true
+        trackResize: true, // Enable automatic resize tracking
+        preserveDrawingBuffer: true // Better performance for resizing
       });
 
       mapInstance.current = map;
@@ -105,6 +116,11 @@ const KioskGlobe = ({
 
       map.on('load', () => {
         console.log('🎯 Kiosk map loaded');
+        
+        // Ensure correct size immediately after load
+        setTimeout(() => {
+          handleResize();
+        }, 500);
         
         try {
           if (map.setConfigProperty && map.isStyleLoaded()) {
@@ -137,6 +153,132 @@ const KioskGlobe = ({
     }
   }, [mapboxToken, startAnimation, enableAutoRotation]);
 
+  // Handle window resize to make globe responsive - DEBUG ZOOM PERSISTENCE
+  const handleResize = useCallback(() => {
+    console.log('🔄 handleResize called');
+    
+    if (mapInstance.current && mapContainer.current) {
+      const container = mapContainer.current;
+      const rightPanel = container.closest('.right-panel');
+      
+      // Use the right panel dimensions (67% of window width)
+      const targetWidth = rightPanel ? rightPanel.clientWidth : container.clientWidth;
+      const targetHeight = rightPanel ? rightPanel.clientHeight : container.clientHeight;
+      
+      console.log('📐 Current dimensions:', { targetWidth, targetHeight });
+      console.log('🎯 Current zoom BEFORE:', mapInstance.current.getZoom());
+      
+      // SIMPLE: 1280px = zoom 2.5
+      const baseSize = 1280;
+      const baseZoom = 3;
+      
+      // Use smaller dimension for aspect ratio
+      const currentSize = Math.min(targetWidth, targetHeight);
+      
+      // Direct pixel ratio
+      const pixelRatio = currentSize / baseSize;
+      
+      // Direct zoom scaling - ROUNDED TO 2 DECIMAL PLACES
+      const rawZoom = baseZoom * pixelRatio;
+      const newZoom = Math.round(rawZoom * 100) / 100;
+      
+      console.log('🔢 Direct ratio calculation:', {
+        currentSize,
+        pixelRatio,
+        rawZoom,
+        newZoom,
+        formula: `${baseZoom} * (${currentSize} / ${baseSize}) = ${rawZoom} → ${newZoom}`
+      });
+      
+      // Apply zoom if difference is meaningful
+      const currentZoom = mapInstance.current.getZoom();
+      const zoomDifference = Math.abs(currentZoom - newZoom);
+      
+      if (zoomDifference > 0.05) {
+        console.log('✅ Applying zoom change:', { 
+          from: currentZoom, 
+          to: newZoom, 
+          difference: zoomDifference 
+        });
+        
+        // TEMPORARILY STOP ROTATION to prevent interference
+        if (animationRef.current) {
+          cancelAnimationFrame(animationRef.current);
+          animationRef.current = null;
+          console.log('⏸️ Temporarily stopped rotation for zoom change');
+        }
+        
+        mapInstance.current.resize();
+        
+        mapInstance.current.easeTo({
+          zoom: newZoom,
+          duration: 400
+        });
+        
+        // Check zoom after transition and restart rotation
+        setTimeout(() => {
+          if (mapInstance.current) {
+            console.log('🎯 Zoom AFTER transition:', mapInstance.current.getZoom());
+            
+            // Restart rotation if it was enabled
+            if (enableAutoRotation && !animationRef.current) {
+              console.log('🔄 Restarting rotation after zoom change');
+              startAnimation();
+            }
+          }
+        }, 500);
+        
+      } else {
+        console.log('⚪ Zoom difference too small, skipping:', zoomDifference);
+        mapInstance.current.resize();
+      }
+      
+      // Force canvas dimensions
+      const canvas = container.querySelector('canvas');
+      if (canvas) {
+        canvas.style.width = targetWidth + 'px';
+        canvas.style.height = targetHeight + 'px';
+        canvas.width = targetWidth * (window.devicePixelRatio || 1);
+        canvas.height = targetHeight * (window.devicePixelRatio || 1);
+      }
+      
+      const canvasContainer = container.querySelector('.mapboxgl-canvas-container');
+      if (canvasContainer) {
+        canvasContainer.style.width = targetWidth + 'px';
+        canvasContainer.style.height = targetHeight + 'px';
+      }
+    }
+  }, [enableAutoRotation, startAnimation]);
+
+  // Track container size for recreation approach
+  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
+  const lastSizeRef = useRef({ width: 0, height: 0 });
+
+  // Use ResizeObserver for container size detection - DEBUG VERSION  
+  useEffect(() => {
+    if (!mapContainer.current) return;
+    console.log('🔍 Setting up ResizeObserver');
+    
+    const resizeObserver = new ResizeObserver((entries) => {
+      console.log('📏 ResizeObserver triggered with', entries.length, 'entries');
+      for (let entry of entries) {
+        console.log('📦 Container resized to:', {
+          width: entry.contentRect.width,
+          height: entry.contentRect.height
+        });
+      }
+      handleResize();
+    });
+
+    resizeObserver.observe(mapContainer.current);
+    console.log('👁️ ResizeObserver now watching container');
+
+    return () => {
+      console.log('🧹 Cleaning up ResizeObserver');
+      resizeObserver.disconnect();
+    };
+  }, [handleResize]);
+
   // Initialize map
   useEffect(() => {
     if (!mapboxToken) {
@@ -147,9 +289,32 @@ const KioskGlobe = ({
 
     const timer = setTimeout(createMap, 100);
 
+    // Add throttled window resize listener with debugging
+    let resizeTimeout;
+    const throttledResize = () => {
+      console.log('🪟 Window resize event detected');
+      clearTimeout(resizeTimeout);
+      resizeTimeout = setTimeout(() => {
+        console.log('🕐 Throttled resize executing');
+        handleResize();
+      }, 100);
+    };
+
+    window.addEventListener('resize', throttledResize);
+    window.addEventListener('orientationchange', () => {
+      console.log('📱 Orientation change detected');
+      handleResize();
+    });
+
+    console.log('🎧 Window resize listeners attached');
+
     return () => {
       clearTimeout(timer);
+      clearTimeout(resizeTimeout);
       stopAnimation();
+      window.removeEventListener('resize', throttledResize);
+      window.removeEventListener('orientationchange', handleResize);
+      console.log('🧹 Window resize listeners removed');
       if (mapInstance.current) {
         console.log('🧹 Cleaning up kiosk map');
         mapInstance.current.remove();
@@ -157,7 +322,7 @@ const KioskGlobe = ({
       }
       initialized.current = false;
     };
-  }, [createMap, mapboxToken, stopAnimation]);
+  }, [createMap, mapboxToken, stopAnimation, handleResize]);
 
   // Handle location changes from main globe
   useEffect(() => {
@@ -231,19 +396,27 @@ const KioskGlobe = ({
       width: '100%',
       height: '100%',
       backgroundColor: '#000000',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
+      // REMOVED: flex centering that was causing the issue
+      // display: 'flex',
+      // alignItems: 'center',
+      // justifyContent: 'center',
       ...containerStyle
     }}>
 
-      {/* Map container */}
+      {/* Map container - now fully responsive */}
       <div 
         ref={mapContainer}
         style={{ 
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
           width: '100%', 
           height: '100%',
-          backgroundColor: '#000000'
+          backgroundColor: '#000000',
+          minWidth: '300px', // Minimum size for mobile
+          minHeight: '300px'
         }}
       />
 

@@ -1,315 +1,101 @@
-/* App.css - Ultra elegant form + globe (33% / 67%) */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
+/* Add this to your App.css - CORRECTED responsive globe scaling */
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
-body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
-  background: #000;
-  overflow: hidden;
-}
-
+/* IMPORTANT: Ensure base layout remains side-by-side */
 .app-container {
-  display: flex;
-  width: 100vw;
-  height: 100vh;
-  background: #000;
+  display: flex !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  background: #000 !important;
+  flex-direction: row !important; /* Force horizontal layout */
 }
 
-/* Left Panel - Form Flow (33%) */
+/* Left Panel - Form Flow (33%) - PRESERVE ORIGINAL */
 .left-panel {
-  flex: 0 0 33%;
-  background: linear-gradient(180deg, #0a0a0a 0%, #1a1a1a 100%);
-  border-right: 1px solid rgba(255, 255, 255, 0.08);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden; /* No scrollbar */
+  flex: 0 0 33% !important;
+  background: linear-gradient(180deg, #0a0a0a 0%, #1a1a1a 100%) !important;
+  border-right: 1px solid rgba(255, 255, 255, 0.08) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  min-width: 300px !important; /* Prevent it from getting too small */
 }
 
-/* Right Panel - Globe Display (67%) */
+/* Right Panel - Globe Display (67%) - PRESERVE ORIGINAL */
 .right-panel {
-  flex: 0 0 67%;
-  background: #000;
-  position: relative;
+  flex: 0 0 67% !important;
+  background: #000 !important;
+  position: relative !important;
+  overflow: hidden !important;
+  min-height: 400px !important;
 }
 
-/* Form Container */
-.form-container {
-  padding: 40px 32px;
-  color: white;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
+/* Globe container responsive enhancements */
+.kiosk-globe-container {
+  width: 100% !important;
+  height: 100% !important;
+  position: relative !important;
+  overflow: hidden !important;
 }
 
-.form-section {
-  margin-bottom: 40px;
+/* Ensure Mapbox canvas scales properly */
+.kiosk-globe-container .mapboxgl-canvas-container,
+.kiosk-globe-container .mapboxgl-canvas {
+  width: 100% !important;
+  height: 100% !important;
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
 }
 
-.form-title {
-  font-size: 28px;
-  font-weight: 300;
-  color: white;
-  margin-bottom: 6px;
-  letter-spacing: -0.02em;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
-}
-
-.form-subtitle {
-  font-size: 15px;
-  color: rgba(255, 255, 255, 0.6);
-  margin-bottom: 32px;
-  font-weight: 400;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
-}
-
-/* Progress Dots */
-.progress-dots {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 32px;
-  justify-content: center;
-}
-
-.progress-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.2);
-  transition: all 0.3s ease;
-}
-
-.progress-dot.active {
-  background: #1976d2;
-  transform: scale(1.2);
-}
-
-.progress-dot.completed {
-  background: #81d4fa;
-}
-
-/* Question */
-.question-text {
-  font-size: 20px;
-  font-weight: 400;
-  color: white;
-  margin-bottom: 16px;
-  letter-spacing: -0.01em;
-}
-
-/* Form Inputs */
-.form-input,
-.form-select {
-  width: 100%;
-  padding: 16px 20px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 12px;
-  color: white;
-  font-size: 16px;
-  font-family: 'Inter', sans-serif;
-  transition: all 0.2s ease;
-  margin-bottom: 24px;
-}
-
-.form-input:focus,
-.form-select:focus {
-  outline: none;
-  border-color: rgba(129, 212, 250, 0.4);
-  background: rgba(255, 255, 255, 0.06);
-  box-shadow: 0 0 0 3px rgba(129, 212, 250, 0.1);
-}
-
-.form-input::placeholder {
-  color: rgba(255, 255, 255, 0.4);
-}
-
-/* Next Button */
-.next-button {
-  width: 100%;
-  padding: 16px 24px;
-  background: linear-gradient(135deg, #1976d2 0%, #1565c0 100%);
-  border: none;
-  border-radius: 12px;
-  color: white;
-  font-size: 16px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  font-family: 'Inter', sans-serif;
-}
-
-.next-button:hover:not(.disabled) {
-  background: linear-gradient(135deg, #1565c0 0%, #0d47a1 100%);
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(25, 118, 210, 0.3);
-}
-
-.next-button.disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-  transform: none;
-}
-
-/* Stats Section */
-.stats-section {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-}
-
-.stats-title {
-  font-size: 16px;
-  font-weight: 500;
-  color: white;
-  margin-bottom: 16px;
-  letter-spacing: -0.01em;
-}
-
-/* Top 3 Cities */
-.top-cities {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-bottom: 16px;
-}
-
-.city-card {
-  display: flex;
-  align-items: center;
-  padding: 14px 16px;
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: 10px;
-  transition: all 0.2s ease;
-  cursor: pointer;
-}
-
-.city-card:hover {
-  background: rgba(255, 255, 255, 0.04);
-  border-color: rgba(129, 212, 250, 0.2);
-  transform: translateY(-1px);
-}
-
-.city-rank {
-  font-size: 12px;
-  font-weight: 600;
-  color: #81d4fa;
-  min-width: 20px;
-  margin-right: 12px;
-}
-
-.city-main {
-  display: flex;
-  align-items: center;
-  flex: 1;
-}
-
-.city-flag {
-  font-size: 18px;
-  margin-right: 10px;
-}
-
-.city-details {
-  flex: 1;
-}
-
-.city-name {
-  font-size: 14px;
-  font-weight: 500;
-  color: white;
-  margin-bottom: 2px;
-}
-
-.city-count {
-  font-size: 12px;
-  color: #81d4fa;
-  font-weight: 500;
-}
-
-/* Recent Visitors */
-.recent-visitors {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.visitor-card {
-  display: flex;
-  align-items: center;
-  padding: 10px 12px;
-  background: rgba(255, 255, 255, 0.015);
-  border-radius: 8px;
-  transition: all 0.2s ease;
-}
-
-.visitor-card:hover {
-  background: rgba(255, 255, 255, 0.03);
-}
-
-.visitor-flag {
-  font-size: 14px;
-  margin-right: 8px;
-}
-
-.visitor-info {
-  flex: 1;
-}
-
-.visitor-name {
-  font-size: 13px;
-  font-weight: 500;
-  color: white;
-  margin-bottom: 1px;
-}
-
-.visitor-location {
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.6);
-}
-
-.visitor-time {
-  font-size: 11px;
-  color: rgba(129, 212, 250, 0.8);
-  font-weight: 500;
-}
-
-/* Responsive Design */
-@media (max-width: 1024px) {
+/* ONLY allow responsive changes on very large screens */
+@media (min-width: 1400px) {
   .left-panel {
-    flex: 0 0 40%;
+    flex: 0 0 30% !important; /* Slightly smaller form on huge screens */
   }
   
   .right-panel {
-    flex: 0 0 60%;
-  }
-  
-  .form-container {
-    padding: 32px 24px;
+    flex: 0 0 70% !important; /* More space for globe */
   }
 }
 
-@media (max-width: 768px) {
+/* ONLY switch to vertical layout on VERY small mobile screens */
+@media (max-width: 480px) {
   .app-container {
-    flex-direction: column;
-  }
-  
-  .left-panel,
-  .right-panel {
-    flex: 1;
-    min-height: 50vh;
+    flex-direction: column !important;
+    height: 100vh !important;
+    overflow: hidden !important;
   }
   
   .left-panel {
-    border-right: none;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    flex: 0 0 40vh !important; /* Fixed height for form */
+    min-height: 300px !important;
+    border-right: none !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+  }
+  
+  .right-panel {
+    flex: 1 !important; /* Globe takes remaining space */
+    min-height: 300px !important;
   }
   
   .form-container {
-    padding: 24px 20px;
+    padding: 20px 16px !important;
   }
+  
+  .form-title {
+    font-size: 24px !important;
+  }
+}
+
+/* Ensure smooth transitions when resizing */
+.kiosk-globe-container {
+  transition: all 0.2s ease !important;
+}
+
+/* Fix for potential Mapbox control positioning issues */
+.kiosk-globe-container .mapboxgl-ctrl-top-left,
+.kiosk-globe-container .mapboxgl-ctrl-top-right,
+.kiosk-globe-container .mapboxgl-ctrl-bottom-left,
+.kiosk-globe-container .mapboxgl-ctrl-bottom-right {
+  display: none !important; /* Hide any unwanted controls */
 }
