@@ -170,7 +170,7 @@ const KioskGlobe = ({
       
       // SIMPLE: 1280px = zoom 2.5
       const baseSize = 1280;
-      const baseZoom = 3;
+      const baseZoom = 2.9;
       
       // Use smaller dimension for aspect ratio
       const currentSize = Math.min(targetWidth, targetHeight);
