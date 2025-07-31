@@ -1,611 +1,276 @@
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+// Fixed GlobeView.jsx - Direct Mapbox GL, no react-map-gl
+import React, { useRef, useState, useCallback, useEffect, useMemo } from 'react';
 import mapboxgl from 'mapbox-gl';
-import 'mapbox-gl/dist/mapbox-gl.css'; // Import required CSS
-import { WORLD_PINS } from './worldPins.jsx';
-import AddPinOverlay from './AddPinOverlay.jsx';
-import Top5Overlay from './Top5Overlay.jsx';
+import 'mapbox-gl/dist/mapbox-gl.css';
 
-// Consolidated Globe Configuration
-const GLOBE_CONFIG = {
-  // Map Instance Properties
-  mapProperties: {
-    projection: "globe",
-    mapboxAccessToken: import.meta.env.VITE_MAPBOX_ACCESS_TOKEN,
-    mapStyle: "mapbox://styles/mapbox/satellite-streets-v12",
-    maxZoom: 10,
-    minZoom: 1,
-    maxPitch: 60,
-    dragRotate: true,
-    touchZoomRotate: true,
-    pitchWithRotate: false,
-    cooperativeGestures: false,
-    doubleClickZoom: true,
-    scrollZoom: true,
-    antialias: true,
-    preserveDrawingBuffer: false,
-    failIfMajorPerformanceCaveat: false,
-    renderWorldCopies: false,
-    trackResize: true,
-    attributionControl: false,
-    logoPosition: "bottom-right"
-  },
-  
-  // Visual Settings
-  visualSettings: {
-    showAtmosphere: true,
-    atmosphereIntensity: 1.5,
-    showWater: true,
-    showLandcover: true,
-    showPlaceLabels: true,
-    labelSize: 1.2
-  },
-  
-  // Default Camera Position
-  defaultView: {
-    center: [0, 0],
-    zoom: 1.5,
-    pitch: 0,
-    bearing: 0
-  }
-};
-
-// Styles
-const containerStyle = {
-  position: 'relative',
-  width: '100%',
-  height: '100%',
-  background: '#1a1a2e',
-  overflow: 'hidden',
-  padding: 0,
-  margin: 0
-};
-
-const overlayStyle = {
-  position: 'absolute',
-  top: '50%',
-  left: '50%',
-  transform: 'translate(-50%, -50%)',
-  textAlign: 'center',
-  color: '#fff',
-  zIndex: 1000,
-  padding: '20px'
-};
-
-const spinnerStyle = {
-  width: '40px',
-  height: '40px',
-  border: '3px solid rgba(255, 255, 255, 0.3)',
-  borderTop: '3px solid #fff',
-  borderRadius: '50%',
-  animation: 'spin 1s linear infinite',
-  margin: '0 auto 16px'
-};
-
-const buttonStyle = {
-  background: '#007bff',
-  color: 'white',
-  border: 'none',
-  padding: '10px 20px',
-  borderRadius: '5px',
-  cursor: 'pointer',
-  fontSize: '16px',
-  marginTop: '16px'
-};
-
-const mapContainerStyle = {
-  position: 'absolute',
-  top: 0,
-  left: 0,
-  width: '100%',
-  height: '100%',
-  margin: 0,
-  padding: 0,
-  marginBottom: '80px' // Add bottom margin to push globe up
-};
-
-// Add CSS animation
-if (!document.querySelector('style[data-globe-animation]')) {
-  const style = document.createElement('style');
-  style.setAttribute('data-globe-animation', 'true');
-  style.textContent = `
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
-  `;
-  document.head.appendChild(style);
-}
-
-const GlobeView = ({ 
-  onMapLoad, 
-  onMapMove, 
-  onMapClick,
-  onLocationSelect,
-  onPinClick,
-  initialCenter = [0, 0],
-  initialZoom = 2,
-  initialPitch = 0,
-  initialBearing = 0,
+const GlobeView = ({
   className = '',
-  children,
-  isActive = true,
+  containerStyle = {},
   enableAutoRotation = true,
-  rotationSpeed = 0.08, // Increased rotation speed
-  stopRotationZoom = 3,
-  showPins = true,
-  pinsToShow = WORLD_PINS,
-  showAddPinButton = true,
-  showBackButton = false,
-  onBackToGlobe
+  children
 }) => {
-  const mapContainer = useRef(null);
-  const mapInstance = useRef(null);
-  const initialized = useRef(false);
-  const rotationRef = useRef(null);
-  const userInteracting = useRef(false);
-  const rotationPaused = useRef(false); // Use ref instead of state
-  const allPinsRef = useRef(pinsToShow); // Use ref for pins to prevent re-renders
+  console.log('🌍 Final Globe rendering with direct Mapbox GL');
+
+  // State
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [userPins, setUserPins] = useState([]);
-  const [isAddPinOpen, setIsAddPinOpen] = useState(false);
-  const [allPins, setAllPins] = useState(pinsToShow);
-  const [isZoomedIn, setIsZoomedIn] = useState(false);
-  const [showTop5, setShowTop5] = useState(false);
-  const [top5Data, setTop5Data] = useState([]);
 
-  // Handle opening add pin overlay
-  const handleOpenAddPin = useCallback(() => {
-    setIsAddPinOpen(true);
+  // UI State
+  const [showQuestions, setShowQuestions] = useState(false);
+  const [currentStep, setCurrentStep] = useState(0);
+  const [formData, setFormData] = useState({});
+
+  // Refs
+  const mapContainer = useRef(null);
+  const mapInstance = useRef(null);
+  const animationRef = useRef(null);
+  const initialized = useRef(false);
+  const userInteracting = useRef(false);
+
+  // Mock data for top 10 cities
+  const top10Cities = [
+    { rank: 1, city: "Tokyo", country: "Japan", visitors: 847, flag: "🇯🇵" },
+    { rank: 2, city: "New York", country: "United States", visitors: 721, flag: "🇺🇸" },
+    { rank: 3, city: "London", country: "United Kingdom", visitors: 693, flag: "🇬🇧" },
+    { rank: 4, city: "Paris", country: "France", visitors: 612, flag: "🇫🇷" },
+    { rank: 5, city: "Sydney", country: "Australia", visitors: 534, flag: "🇦🇺" },
+    { rank: 6, city: "Toronto", country: "Canada", visitors: 487, flag: "🇨🇦" },
+    { rank: 7, city: "Berlin", country: "Germany", visitors: 423, flag: "🇩🇪" },
+    { rank: 8, city: "Mumbai", country: "India", visitors: 398, flag: "🇮🇳" },
+    { rank: 9, city: "São Paulo", country: "Brazil", visitors: 356, flag: "🇧🇷" },
+    { rank: 10, city: "Dubai", country: "UAE", visitors: 334, flag: "🇦🇪" }
+  ];
+
+  // Question flow
+  const questions = [
+    {
+      id: 'location',
+      type: 'search',
+      question: 'Where are you from?',
+      placeholder: 'Enter your city or country...',
+      required: true
+    },
+    {
+      id: 'name',
+      type: 'text',
+      question: 'What\'s your name?',
+      placeholder: 'Enter your name',
+      required: true
+    },
+    {
+      id: 'age',
+      type: 'number',
+      question: 'How old are you?',
+      placeholder: 'Enter your age',
+      min: 13,
+      max: 120,
+      required: true
+    },
+    {
+      id: 'purpose',
+      type: 'select',
+      question: 'What brings you here?',
+      options: [
+        'Just exploring',
+        'Travel planning',
+        'Educational research',
+        'Business purposes',
+        'Other'
+      ],
+      required: true
+    }
+  ];
+
+  // Get token from environment
+  const mapboxToken = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN;
+
+  // Handle question flow
+  const handleStartQuestions = useCallback(() => {
+    setShowQuestions(true);
+    setCurrentStep(0);
   }, []);
 
-  // Update pins when userPins change - but avoid re-renders
-  useEffect(() => {
-    const newAllPins = [...pinsToShow, ...userPins];
-    allPinsRef.current = newAllPins;
-    setAllPins(newAllPins);
-  }, [pinsToShow, userPins]);
-
-  // Handle adding a new user pin - replace existing pin at same location
-  const handleAddPin = useCallback((pinData) => {
-    console.log('🔥 Adding new user pin:', pinData);
-    
-    // Find if there's already a pin at this location (within reasonable distance)
-    const existingPinIndex = allPins.findIndex(pin => {
-      const distance = Math.sqrt(
-        Math.pow(pin.coordinates[0] - pinData.coordinates[0], 2) + 
-        Math.pow(pin.coordinates[1] - pinData.coordinates[1], 2)
-      );
-      return distance < 0.1; // ~11km radius
-    });
-
-    let updatedPins;
-    if (existingPinIndex !== -1) {
-      // Replace existing pin with new user data
-      updatedPins = [...allPins];
-      updatedPins[existingPinIndex] = {
-        ...pinData,
-        id: allPins[existingPinIndex].id, // Keep original ID
-        name: pinData.name,
-        lastUser: {
-          name: pinData.name,
-          age: pinData.age,
-          gender: pinData.gender,
-          timestamp: pinData.timestamp
-        },
-        type: 'location_pin' // Changed from user_pin
-      };
+  const handleNextQuestion = useCallback(() => {
+    if (currentStep < questions.length - 1) {
+      setCurrentStep(currentStep + 1);
     } else {
-      // Add new pin
-      updatedPins = [...allPins, {
-        ...pinData,
-        lastUser: {
-          name: pinData.name,
-          age: pinData.age,
-          gender: pinData.gender,
-          timestamp: pinData.timestamp
-        },
-        type: 'location_pin'
-      }];
+      // Complete the flow
+      console.log('Form completed:', formData);
+      setShowQuestions(false);
+      setCurrentStep(0);
+      setFormData({});
     }
+  }, [currentStep, questions.length, formData]);
 
-    setAllPins(updatedPins);
-    
-    // Update the map source with new pins
-    if (mapInstance.current && mapInstance.current.getSource('world-pins')) {
-      const geojsonData = {
-        type: 'FeatureCollection',
-        features: updatedPins.map(pin => ({
-          type: 'Feature',
-          properties: {
-            id: pin.id,
-            name: pin.name,
-            country: pin.country || pin.location,
-            type: pin.type,
-            lastUser: pin.lastUser || null,
-            description: pin.lastUser ? 
-              `${pin.location || pin.name} - Last visitor: ${pin.lastUser.name}` : 
-              (pin.type === 'location_pin' ? 
-                `${pin.name} from ${pin.location}` : 
-                `${pin.name}, ${pin.country}`)
-          },
-          geometry: {
-            type: 'Point',
-            coordinates: pin.coordinates
-          }
-        }))
-      };
-      
-      mapInstance.current.getSource('world-pins').setData(geojsonData);
-      
-      // Fly to the new/updated pin location (keep current zoom since user is already there)
-      mapInstance.current.flyTo({
-        center: pinData.coordinates,
-        zoom: mapInstance.current.getZoom(), // Maintain current zoom level
-        duration: 2000
-      });
+  const handlePreviousQuestion = useCallback(() => {
+    if (currentStep > 0) {
+      setCurrentStep(currentStep - 1);
     }
-    
-    setIsAddPinOpen(false);
-  }, [allPins]);
+  }, [currentStep]);
 
-  // Auto-rotation function - completely stable
-  const startRotation = useCallback(() => {
-    if (!mapInstance.current || !enableAutoRotation || rotationPaused.current) return;
+  const handleInputChange = useCallback((value) => {
+    const currentQuestion = questions[currentStep];
+    setFormData(prev => ({ ...prev, [currentQuestion.id]: value }));
+  }, [currentStep, questions]);
+
+  const canAdvance = useMemo(() => {
+    const currentQuestion = questions[currentStep];
+    const currentValue = formData[currentQuestion?.id];
     
-    const rotateCamera = () => {
-      if (!mapInstance.current || userInteracting.current || rotationPaused.current) return;
-      
-      const zoom = mapInstance.current.getZoom();
-      if (zoom > stopRotationZoom) return;
-      
+    if (!currentQuestion?.required) return true;
+    if (!currentValue) return false;
+    if (typeof currentValue === 'string' && !currentValue.trim()) return false;
+    
+    return true;
+  }, [currentStep, questions, formData]);
+
+  // Debug token info
+  console.log('🔑 Token info:', {
+    exists: !!mapboxToken,
+    length: mapboxToken?.length,
+    valid: mapboxToken?.startsWith('pk.'),
+    preview: mapboxToken?.substring(0, 20) + '...'
+  });
+
+  console.log('📦 Mapbox GL library:', {
+    imported: !!mapboxgl,
+    hasMap: !!mapboxgl?.Map,
+    version: mapboxgl?.version
+  });
+
+  // Smooth rotation only - no zoom breathing
+  const startAnimation = useCallback(() => {
+    if (!mapInstance.current || userInteracting.current) return;
+    
+    console.log('🌀 Starting smooth rotation - no zoom changes');
+
+    const animate = () => {
+      if (!mapInstance.current || userInteracting.current) return;
+
       const center = mapInstance.current.getCenter();
-      const newLng = center.lng + rotationSpeed;
       
+      // Steady Y-axis rotation (longitude) - smooth and consistent
+      const newLng = center.lng + 0.05;
+      
+      // Fixed zoom - no breathing effect
+      const targetZoom = 2;
+
+      // Apply smooth steady rotation only
       mapInstance.current.easeTo({
         center: [newLng, center.lat],
-        duration: 0
+        zoom: targetZoom, // No zoom changes
+        duration: 50,
+        easing: t => t
       });
-      
-      rotationRef.current = requestAnimationFrame(rotateCamera);
-    };
-    
-    rotationRef.current = requestAnimationFrame(rotateCamera);
-  }, [enableAutoRotation, rotationSpeed, stopRotationZoom]); // Fixed dependencies
 
-  const stopRotation = useCallback(() => {
-    if (rotationRef.current) {
-      cancelAnimationFrame(rotationRef.current);
-      rotationRef.current = null;
+      animationRef.current = requestAnimationFrame(animate);
+    };
+
+    animationRef.current = requestAnimationFrame(animate);
+  }, []);
+
+  const stopAnimation = useCallback(() => {
+    if (animationRef.current) {
+      cancelAnimationFrame(animationRef.current);
+      animationRef.current = null;
+      console.log('⏸️ Animation stopped');
     }
   }, []);
 
-  // Add pins to the map
-  const addPinsToMap = useCallback((map) => {
-    if (!showPins || !allPins || allPins.length === 0) {
-      console.warn('⚠️ No pins to show');
-      return;
-    }
-
-    console.log('🔍 Adding pins to map...', { showPins, pinCount: allPins.length });
-
-    const geojsonData = {
-      type: 'FeatureCollection',
-      features: allPinsRef.current.map(pin => ({
-        type: 'Feature',
-        properties: {
-          id: pin.id,
-          name: pin.name,
-          country: pin.country || pin.location,
-          type: pin.type,
-          description: pin.type === 'user_pin' ? 
-            `${pin.name} from ${pin.location}` : 
-            `${pin.name}, ${pin.country}`
-        },
-        geometry: {
-          type: 'Point',
-          coordinates: pin.coordinates
-        }
-      }))
-    };
-
-    console.log('📊 GeoJSON data:', geojsonData);
-
-    try {
-      // Add pins source
-      map.addSource('world-pins', {
-        type: 'geojson',
-        data: geojsonData
-      });
-      console.log('✅ Added pins source');
-
-      // Add pin-style circles
-      map.addLayer({
-        id: 'pins-icons',
-        type: 'circle',
-        source: 'world-pins',
-        paint: {
-          'circle-radius': 8,
-          'circle-color': '#EA4335',
-          'circle-stroke-width': 2,
-          'circle-stroke-color': '#ffffff',
-          'circle-opacity': 0.9
-        }
-      });
-      console.log('✅ Added pins icons layer');
-
-      // Add simple labels
-      map.addLayer({
-        id: 'pins-labels',
-        type: 'symbol',
-        source: 'world-pins',
-        layout: {
-          'text-field': ['get', 'name'],
-          'text-font': ['Open Sans Semibold', 'Arial Unicode MS Bold'],
-          'text-offset': [0, 2],
-          'text-anchor': 'top',
-          'text-size': 12
-        },
-        paint: {
-          'text-color': '#ffffff',
-          'text-halo-color': '#000000',
-          'text-halo-width': 1
-        },
-        minzoom: 2
-      });
-      console.log('✅ Added pins labels layer');
-
-      // Add click handlers for pins
-      map.on('click', 'pins-icons', (e) => {
-        console.log('🖱️ Pin clicked!', e);
-        const features = map.queryRenderedFeatures(e.point, {
-          layers: ['pins-icons']
-        });
-
-        if (!features.length) return;
-
-        const feature = features[0];
-        const coordinates = feature.geometry.coordinates.slice();
-        const properties = feature.properties;
-
-        while (Math.abs(e.lngLat.lng - coordinates[0]) > 180) {
-          coordinates[0] += e.lngLat.lng > coordinates[0] ? 360 : -360;
-        }
-
-        new mapboxgl.Popup()
-          .setLngLat(coordinates)
-          .setHTML(`
-            <div style="padding: 12px; min-width: 200px;">
-              <h3 style="margin: 0 0 8px 0; font-size: 16px; color: #333;">${properties.name}</h3>
-              <p style="margin: 0 0 8px 0; font-size: 14px; color: #666;">${properties.country}</p>
-              ${properties.visitorCount > 0 ? `
-                <div style="border-top: 1px solid #eee; padding-top: 8px; margin-top: 8px;">
-                  <p style="margin: 0 0 8px 0; font-size: 14px; color: #EA4335; font-weight: bold;">
-                    🏆 ${properties.visitorCount} visitor${properties.visitorCount > 1 ? 's' : ''}
-                  </p>
-                  ${properties.mostRecentVisitor ? `
-                    <p style="margin: 0 0 4px 0; font-size: 12px; color: #888; font-weight: bold;">Most recent visitor:</p>
-                    <p style="margin: 0 0 2px 0; font-size: 14px; color: #333;">${JSON.parse(properties.mostRecentVisitor).name}</p>
-                    <p style="margin: 0 0 2px 0; font-size: 12px; color: #666;">Age: ${JSON.parse(properties.mostRecentVisitor).age}, ${JSON.parse(properties.mostRecentVisitor).gender}</p>
-                    <p style="margin: 0; font-size: 11px; color: #aaa;">${new Date(JSON.parse(properties.mostRecentVisitor).timestamp).toLocaleDateString()}</p>
-                  ` : ''}
-                </div>
-              ` : `
-                <p style="margin: 8px 0 0 0; font-size: 11px; color: #888; font-style: italic;">No visitors yet - be the first!</p>
-              `}
-            </div>
-          `)
-          .addTo(map);
-
-        if (onPinClick) {
-          onPinClick({
-            id: properties.id,
-            name: properties.name,
-            country: properties.country,
-            type: properties.type,
-            coordinates: coordinates
-          });
-        }
-      });
-
-      map.on('mouseenter', 'pins-icons', () => {
-        map.getCanvas().style.cursor = 'pointer';
-      });
-
-      map.on('mouseleave', 'pins-icons', () => {
-        map.getCanvas().style.cursor = '';
-      });
-
-      console.log('✅ Pin event handlers added');
-
-    } catch (error) {
-      console.error('❌ Error in addPinsToMap:', error);
-    }
-
-  }, [showPins, allPins, onPinClick]);
-
-  // Validate token on mount
-  useEffect(() => {
-    const token = GLOBE_CONFIG.mapProperties.mapboxAccessToken;
-    
-    console.log('🔑 Token validation:', {
-      exists: !!token,
-      length: token?.length,
-      startsWithPk: token?.startsWith('pk.'),
-      preview: token ? token.substring(0, 20) + '...' : 'NULL'
-    });
-
-    if (!token) {
-      setError('No Mapbox token found. Please check your .env file.');
-      setIsLoading(false);
-      return;
-    }
-
-    if (!token.startsWith('pk.')) {
-      setError('Invalid Mapbox token format. Token should start with "pk."');
-      setIsLoading(false);
-      return;
-    }
+  // Remove all interaction handlers since zoom is disabled
+  const handleUserInteraction = useCallback(() => {
+    // User interaction disabled - globe runs continuously
+    console.log('👆 User interaction detected but disabled for kiosk mode');
   }, []);
 
+  const handleUserInteractionEnd = useCallback(() => {
+    // No interaction handling needed
+  }, []);
+
+  // Create map
   const createMap = useCallback(() => {
-    if (initialized.current || mapInstance.current) {
-      console.log('⏭️ Skipping - already initialized');
-      return;
-    }
-
-    const container = mapContainer.current;
-    if (!container) {
-      console.error('❌ No container found');
-      setError('Map container not found');
-      setIsLoading(false);
-      return;
-    }
-
-    container.innerHTML = '';
-    console.log('🌍 Creating map with configuration...');
+    if (initialized.current || !mapContainer.current) return;
+    
+    console.log('🗺️ Creating map instance');
     initialized.current = true;
 
     try {
-      mapboxgl.accessToken = GLOBE_CONFIG.mapProperties.mapboxAccessToken;
+      // Set access token
+      mapboxgl.accessToken = mapboxToken;
 
+      // Use YOUR CUSTOM Mapbox style
       const map = new mapboxgl.Map({
-        container: container,
-        center: initialCenter || GLOBE_CONFIG.defaultView.center,
-        zoom: initialZoom || GLOBE_CONFIG.defaultView.zoom,
-        pitch: initialPitch || GLOBE_CONFIG.defaultView.pitch,
-        bearing: initialBearing || GLOBE_CONFIG.defaultView.bearing,
-        style: GLOBE_CONFIG.mapProperties.mapStyle,
-        projection: GLOBE_CONFIG.mapProperties.projection,
-        maxZoom: GLOBE_CONFIG.mapProperties.maxZoom,
-        minZoom: GLOBE_CONFIG.mapProperties.minZoom,
-        maxPitch: GLOBE_CONFIG.mapProperties.maxPitch,
-        dragRotate: GLOBE_CONFIG.mapProperties.dragRotate,
-        touchZoomRotate: { zoom: false, rotate: true }, // Allow touch rotation but disable touch zoom
-        pitchWithRotate: GLOBE_CONFIG.mapProperties.pitchWithRotate,
-        cooperativeGestures: GLOBE_CONFIG.mapProperties.cooperativeGestures,
-        doubleClickZoom: GLOBE_CONFIG.mapProperties.doubleClickZoom,
-        scrollZoom: GLOBE_CONFIG.mapProperties.scrollZoom,
+        container: mapContainer.current,
+        style: 'mapbox://styles/okekec21/cmd63rz9p00sd01qn2kcefwj0', // Your custom style
+        center: [0, 20],
+        zoom: 2,
+        pitch: 15,
+        bearing: 0,
+        projection: 'globe',
         antialias: true,
-        preserveDrawingBuffer: GLOBE_CONFIG.mapProperties.preserveDrawingBuffer,
-        failIfMajorPerformanceCaveat: false,
-        renderWorldCopies: GLOBE_CONFIG.mapProperties.renderWorldCopies,
-        trackResize: GLOBE_CONFIG.mapProperties.trackResize,
-        attributionControl: GLOBE_CONFIG.mapProperties.attributionControl,
-        logoPosition: GLOBE_CONFIG.mapProperties.logoPosition
+        maxZoom: 8.5, // Increased zoom range
+        minZoom: 1.5,
+        maxPitch: 75,
+        dragRotate: false,
+        dragPan: false,
+        scrollZoom: false,
+        touchZoomRotate: false,
+        doubleClickZoom: false,
+        keyboard: false,
+        attributionControl: false,
+        renderWorldCopies: false,
+        trackResize: true
       });
 
       mapInstance.current = map;
-      console.log('🗺️ Map created with configuration');
+      console.log('🗺️ Map instance created successfully');
 
+      // Handle map load
       map.on('load', () => {
         console.log('🎯 Map loaded successfully');
         
-        setTimeout(() => {
-          try {
-            if (map.setConfigProperty && map.isStyleLoaded()) {
-              Object.entries(GLOBE_CONFIG.visualSettings).forEach(([key, value]) => {
-                try {
-                  map.setConfigProperty('basemap', key, value);
-                } catch (error) {
-                  console.warn(`Could not set ${key}:`, error.message);
-                }
-              });
-              console.log('✅ Visual settings applied');
-            }
-
-            if (showPins) {
-              try {
-                addPinsToMap(map);
-                console.log(`📍 Added ${allPinsRef.current.length} pins to the map`);
-              } catch (error) {
-                console.error('❌ Error adding pins:', error);
-              }
-            }
-
-            // Set up event listeners
-            if (onMapMove) {
-              map.on('move', () => onMapMove(map));
-            }
-
-            if (onMapClick) {
-              map.on('click', (e) => onMapClick(e, map));
-            }
-
-            if (onLocationSelect) {
-              map.on('click', (e) => {
-                const location = {
-                  name: 'Selected Location',
-                  coordinates: [e.lngLat.lng, e.lngLat.lat]
-                };
-                onLocationSelect(location);
-              });
-            }
-
-            // Set up rotation control event listeners
-            const handleUserInteraction = () => {
-              userInteracting.current = true;
-              stopRotation();
-            };
-
-            const handleUserInteractionEnd = () => {
-              userInteracting.current = false;
-              setTimeout(() => {
-                if (!userInteracting.current && map.getZoom() <= stopRotationZoom) {
-                  startRotation();
-                }
-              }, 2000);
-            };
-
-            map.on('mousedown', handleUserInteraction);
-            map.on('touchstart', handleUserInteraction);
-            map.on('wheel', handleUserInteraction);
+        // Apply MINIMAL settings - just basic atmosphere, no custom properties
+        try {
+          if (map.setConfigProperty && map.isStyleLoaded()) {
+            // ONLY basic atmosphere - no other custom settings
+            map.setConfigProperty('basemap', 'showAtmosphere', true);
+            map.setConfigProperty('basemap', 'atmosphereIntensity', 1.0); // Conservative setting
             
-            map.on('mouseup', handleUserInteractionEnd);
-            map.on('touchend', handleUserInteractionEnd);
-            
-            map.on('zoom', () => {
-              if (map.getZoom() > stopRotationZoom) {
-                stopRotation();
-              } else if (!userInteracting.current) {
-                startRotation();
-              }
-            });
-
-            if (enableAutoRotation) {
-              setTimeout(startRotation, 1000);
-            }
-
-            setIsLoading(false);
-            console.log('✅ Globe initialized successfully');
-
-            if (onMapLoad) {
-              onMapLoad(map);
-            }
-
-          } catch (configError) {
-            console.error('❌ Configuration error:', configError);
-            setIsLoading(false);
+            console.log('✅ Basic globe settings applied - should be visible now');
           }
-        }, 500);
+        } catch (err) {
+          console.warn('⚠️ Could not apply settings:', err.message);
+        }
+
+        setIsLoading(false);
+        
+        // Start animation after map loads
+        if (enableAutoRotation) {
+          setTimeout(startAnimation, 1000);
+        }
       });
 
-      map.on('error', (err) => {
-        console.error('❌ Map error:', err);
+      // Handle map errors
+      map.on('error', (e) => {
+        console.error('❌ Map error:', e);
+        let errorMessage = 'Map failed to load';
         
-        if (err.error?.message?.includes('Failed to fetch') || 
-            err.error?.message?.includes('ERR_NAME_NOT_RESOLVED')) {
-          console.warn('⚠️ Tile loading error (non-fatal):', err.error.message);
-          return;
+        if (e.error?.message?.includes('token')) {
+          errorMessage = 'Invalid Mapbox token. Please check your token.';
+        } else if (e.error?.message) {
+          errorMessage = 'Map error: ' + e.error.message;
         }
         
-        if (err.error?.message?.includes('access token')) {
-          setError('Invalid Mapbox access token. Please check your token.');
-        } else {
-          setError('Map failed to load: ' + (err.error?.message || 'Unknown error'));
-        }
+        setError(errorMessage);
         setIsLoading(false);
       });
+
+      // Remove interaction handlers since all interactions are disabled
+      // map.on('mousedown', handleUserInteraction);
+      // map.on('touchstart', handleUserInteraction);
+      // map.on('wheel', handleUserInteraction);
+      // map.on('mouseup', handleUserInteractionEnd);
+      // map.on('touchend', handleUserInteractionEnd);
 
     } catch (err) {
       console.error('❌ Map creation failed:', err);
@@ -613,35 +278,43 @@ const GlobeView = ({
       setIsLoading(false);
       initialized.current = false;
     }
-  }, [initialCenter, initialZoom, initialPitch, initialBearing, onMapLoad, onMapMove, onMapClick, onLocationSelect]);
+  }, [mapboxToken, startAnimation, enableAutoRotation, handleUserInteraction, handleUserInteractionEnd]);
 
+  // Initialize map
   useEffect(() => {
-    if (error) return;
+    if (!mapboxToken) {
+      setError('Missing Mapbox token');
+      setIsLoading(false);
+      return;
+    }
 
-    const timer = setTimeout(() => {
-      if (!initialized.current && !mapInstance.current) {
-        createMap();
-      }
-    }, 100);
+    if (!mapboxgl || !mapboxgl.Map) {
+      setError('Mapbox GL library not loaded');
+      setIsLoading(false);
+      return;
+    }
+
+    const timer = setTimeout(createMap, 100);
 
     return () => {
       clearTimeout(timer);
-      stopRotation();
+      stopAnimation();
       if (mapInstance.current) {
-        console.log('🧹 Cleanup');
+        console.log('🧹 Cleaning up map');
         mapInstance.current.remove();
         mapInstance.current = null;
       }
       initialized.current = false;
     };
-  }, [createMap, error]);
+  }, [createMap, mapboxToken, stopAnimation]);
 
-  const handleRetry = () => {
-    console.log('🔄 Retry clicked');
+  // Handle retry
+  const handleRetry = useCallback(() => {
+    console.log('🔄 Retrying map creation');
     setError(null);
     setIsLoading(true);
     initialized.current = false;
-    stopRotation();
+    stopAnimation();
     
     if (mapInstance.current) {
       mapInstance.current.remove();
@@ -649,194 +322,271 @@ const GlobeView = ({
     }
     
     setTimeout(createMap, 100);
-  };
+  }, [createMap, stopAnimation]);
 
-  const showOverlay = isLoading || error;
+  // Show token error
+  if (!mapboxToken) {
+    return (
+      <div style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: 'rgba(0, 0, 0, 0.9)',
+        color: 'white',
+        zIndex: 1000,
+        padding: '20px'
+      }}>
+        <div style={{ fontSize: '48px', marginBottom: '20px' }}>⚠️</div>
+        <h2 style={{ margin: '0 0 15px 0', textAlign: 'center' }}>Missing Mapbox Token</h2>
+        <p style={{ margin: '0 0 20px 0', textAlign: 'center', opacity: 0.8 }}>
+          Add your Mapbox access token to get started
+        </p>
+        <pre style={{ 
+          background: 'rgba(255,255,255,0.1)', 
+          padding: '20px', 
+          borderRadius: '8px',
+          fontSize: '14px',
+          fontFamily: 'monospace',
+          textAlign: 'center',
+          border: '1px solid rgba(255,255,255,0.2)'
+        }}>
+          VITE_MAPBOX_ACCESS_TOKEN=pk.your_token_here
+        </pre>
+        <p style={{ fontSize: '12px', opacity: 0.6, marginTop: '15px', textAlign: 'center' }}>
+          Get your free token at: <strong>mapbox.com → Account → Access tokens</strong>
+        </p>
+      </div>
+    );
+  }
+
+  // Show invalid token error
+  if (!mapboxToken.startsWith('pk.')) {
+    return (
+      <div style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: 'rgba(0, 0, 0, 0.9)',
+        color: 'white',
+        zIndex: 1000,
+        padding: '20px'
+      }}>
+        <div style={{ fontSize: '48px', marginBottom: '20px' }}>⚠️</div>
+        <h2 style={{ margin: '0 0 15px 0' }}>Invalid Mapbox Token</h2>
+        <p style={{ margin: '0 0 10px 0', textAlign: 'center' }}>
+          Token should start with "pk." but starts with "{mapboxToken.substring(0, 3)}"
+        </p>
+        <p style={{ fontSize: '12px', opacity: 0.6, textAlign: 'center' }}>
+          Make sure you're using the <strong>public token</strong> (pk.) not the secret token (sk.)
+        </p>
+      </div>
+    );
+  }
 
   return (
-    <div className={`globe-view-container ${className}`} style={containerStyle}>
-      {/* Map container with bottom margin */}
+    <div className={`globe-view-container ${className}`} style={{
+      position: 'fixed', // Use fixed positioning to ignore any parent containers
+      top: 0,
+      left: 0,
+      width: '100vw', // Full viewport width
+      height: '100vh', // Full viewport height
+      backgroundColor: '#000000', // Pure black background
+      display: 'flex',
+      alignItems: 'center', // Center vertically
+      justifyContent: 'center', // Center horizontally
+      margin: 0,
+      padding: 0,
+      ...containerStyle
+    }}>
+
+      {/* Beautiful Title Overlay */}
+      <div style={{
+        position: 'absolute',
+        top: '40px',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        zIndex: 2000,
+        textAlign: 'center',
+        color: 'white',
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "SF Pro Display", Roboto, sans-serif',
+        pointerEvents: 'none', // Don't interfere with map interactions
+        textShadow: '0 4px 20px rgba(0, 0, 0, 0.8), 0 2px 4px rgba(0, 0, 0, 0.5)'
+      }}>
+        <h1 style={{
+          fontSize: '3.5rem',
+          fontWeight: '100',
+          margin: '0 0 8px 0',
+          letterSpacing: '2px',
+          background: 'linear-gradient(135deg, #ffffff 0%, #e1f5fe 50%, #81d4fa 100%)',
+          WebkitBackgroundClip: 'text',
+          WebkitTextFillColor: 'transparent',
+          backgroundClip: 'text',
+          filter: 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))'
+        }}>
+          TERRA
+        </h1>
+        <p style={{
+          fontSize: '1.1rem',
+          fontWeight: '300',
+          margin: 0,
+          opacity: 0.85,
+          letterSpacing: '1px',
+          color: 'rgba(255, 255, 255, 0.9)'
+        }}>
+          Interactive Globe Explorer
+        </p>
+      </div>
+      {/* Map container with enhanced antialiasing */}
       <div 
-        ref={mapContainer} 
-        id="globe-map-container"
-        style={mapContainerStyle}
+        ref={mapContainer}
+        style={{ 
+          width: '100%', 
+          height: '100%',
+          backgroundColor: '#000000', // Ensure map container is also black
+          // CSS-based antialiasing and smoothing
+          filter: 'blur(0.3px) contrast(1.1) saturate(1.15)', // Subtle blur + enhanced colors
+          imageRendering: 'auto',
+          WebkitFontSmoothing: 'antialiased',
+          MozOsxFontSmoothing: 'grayscale',
+          // Perfect centering with hardware acceleration
+          position: 'relative',
+          left: '50%',
+          top: '50%',
+          transform: 'translate(-50%, -50%) translateZ(0)', // Combined transform for centering + hardware acceleration
+          WebkitTransform: 'translate(-50%, -50%) translateZ(0)', // Webkit fallback
+          willChange: 'transform, filter'
+        }}
       />
 
-      {/* Overlay for loading/error */}
-      {showOverlay && (
-        <div style={overlayStyle}>
-          {isLoading && !error && (
-            <>
-              <div style={spinnerStyle}></div>
-              <p>Loading Globe View...</p>
-              <p style={{ fontSize: '14px', opacity: 0.7 }}>
-                Initializing map...
-              </p>
-            </>
-          )}
+      {/* Loading overlay */}
+      {isLoading && (
+        <div style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+          color: 'white',
+          zIndex: 1000,
+          backdropFilter: 'blur(5px)'
+        }}>
+          <div style={{
+            width: '60px',
+            height: '60px',
+            border: '4px solid rgba(255, 255, 255, 0.3)',
+            borderTop: '4px solid white',
+            borderRadius: '50%',
+            animation: 'spin 1s linear infinite',
+            marginBottom: '25px'
+          }}></div>
+          <h3 style={{ margin: '0 0 10px 0', fontSize: '24px' }}>Loading Globe...</h3>
+          <p style={{ margin: 0, opacity: 0.7, fontSize: '16px' }}>Preparing breathing animation</p>
+        </div>
+      )}
 
-          {error && (
-            <>
-              <div style={{ fontSize: '48px', marginBottom: '16px' }}>⚠️</div>
-              <h3 style={{ margin: '0 0 8px 0', fontSize: '24px' }}>Failed to Load Globe</h3>
-              <p style={{ margin: '0 0 20px 0', opacity: 0.8 }}>{error}</p>
-            </>
-          )}
-
-          <button onClick={handleRetry} style={buttonStyle}>
-            {error ? 'Retry' : 'Force Retry'}
+      {/* Error overlay */}
+      {error && (
+        <div style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: 'rgba(0, 0, 0, 0.9)',
+          color: 'white',
+          zIndex: 1000,
+          padding: '20px'
+        }}>
+          <div style={{ fontSize: '48px', marginBottom: '20px' }}>❌</div>
+          <h3 style={{ margin: '0 0 15px 0', fontSize: '24px' }}>Globe Failed to Load</h3>
+          <p style={{ 
+            margin: '0 0 25px 0', 
+            textAlign: 'center', 
+            maxWidth: '500px',
+            fontSize: '16px',
+            lineHeight: '1.4'
+          }}>
+            {error}
+          </p>
+          <button 
+            onClick={handleRetry}
+            style={{
+              backgroundColor: 'rgba(255, 255, 255, 0.1)',
+              color: 'white',
+              border: '2px solid rgba(255, 255, 255, 0.3)',
+              borderRadius: '25px',
+              padding: '12px 24px',
+              fontSize: '16px',
+              cursor: 'pointer',
+              transition: 'all 0.3s ease',
+              backdropFilter: 'blur(10px)'
+            }}
+          >
+            🔄 Retry
           </button>
         </div>
       )}
 
-      {children}
-
-      {/* Back to Globe Button */}
-      {showBackButton && (
-        <button
-          onClick={onBackToGlobe}
-          style={{
-            position: 'absolute',
-            top: '20px',
-            left: '20px',
-            backgroundColor: 'rgba(0, 0, 0, 0.7)',
-            color: 'white',
-            border: '2px solid rgba(255, 255, 255, 0.3)',
-            borderRadius: '50px',
-            padding: '12px 20px',
-            fontSize: '16px',
-            fontWeight: '500',
-            cursor: 'pointer',
-            backdropFilter: 'blur(10px)',
-            transition: 'all 0.3s ease',
-            zIndex: 1000,
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px'
-          }}
-          onMouseEnter={(e) => {
-            e.target.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
-            e.target.style.borderColor = 'rgba(255, 255, 255, 0.5)';
-          }}
-          onMouseLeave={(e) => {
-            e.target.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
-            e.target.style.borderColor = 'rgba(255, 255, 255, 0.3)';
-          }}
-        >
-          ← Back to Globe
-        </button>
-      )}
-
-      {/* Logo Overlay - Top Left */}
+      {/* Debug info */}
       <div style={{
         position: 'absolute',
-        top: '20px',
-        left: '20px',
+        top: '15px',
+        right: '15px',
+        background: 'rgba(0,0,0,0.8)',
+        color: 'white',
+        padding: '15px',
+        borderRadius: '8px',
+        fontSize: '12px',
+        fontFamily: 'monospace',
         zIndex: 1000,
-        backgroundColor: 'rgba(255, 255, 255, 0.1)',
-        backdropFilter: 'blur(10px)',
-        borderRadius: '12px',
-        padding: '12px',
-        border: '1px solid rgba(255, 255, 255, 0.2)',
-        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)'
+        minWidth: '220px',
+        border: '1px solid rgba(255,255,255,0.1)'
       }}>
-        <img 
-          src="/assets/logo.png" 
-          alt="Logo"
-          style={{
-            height: '50px',
-            width: 'auto',
-            display: 'block'
-          }}
-          onError={(e) => {
-            console.warn('Logo not found at /assets/logo.png');
-            e.target.parentElement.style.display = 'none';
-          }}
-        />
+        <div style={{ fontWeight: 'bold', marginBottom: '8px' }}>🌍 Globe Status:</div>
+        <div>Loading: {isLoading ? '⏳ Yes' : '✅ No'}</div>
+        <div>Error: {error ? '❌ Yes' : '✅ No'}</div>
+        <div>Token: {mapboxToken ? '✅ Found' : '❌ Missing'}</div>
+        <div>Mapbox GL: {mapboxgl ? '✅ Loaded' : '❌ Missing'}</div>
+        <div>Map: {mapInstance.current ? '✅ Created' : '⏳ Waiting'}</div>
+        <div>Animation: {animationRef.current ? '🌀 Running' : '⏸️ Stopped'}</div>
+        <div>Interaction: {userInteracting.current ? '👆 Active' : '💤 Idle'}</div>
       </div>
 
-      {/* Add Pin Button - More transparent with black background and black border */}
-      {showAddPinButton && !isLoading && !error && (
-        <button
-          onClick={handleOpenAddPin}
-          style={{
-            position: 'absolute',
-            bottom: '60px',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            backgroundColor: 'rgba(0, 0, 0, 0.3)', // More transparent black
-            color: 'white',
-            border: '2px solid rgba(0, 0, 0, 0.4)', // Black border
-            borderRadius: '50px',
-            padding: '18px 35px',
-            fontSize: '18px',
-            fontWeight: '400', // Lighter font weight
-            cursor: 'pointer',
-            backdropFilter: 'blur(8px)',
-            transition: 'all 0.3s ease',
-            zIndex: 1000,
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px',
-            minWidth: '200px',
-            justifyContent: 'center',
-            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
-          }}
-          onMouseEnter={(e) => {
-            e.target.style.backgroundColor = 'rgba(0, 0, 0, 0.5)'; // Slightly less transparent on hover
-            e.target.style.borderColor = 'rgba(0, 0, 0, 0.6)'; // Darker black border on hover
-            e.target.style.transform = 'translateX(-50%) translateY(-3px)';
-          }}
-          onMouseLeave={(e) => {
-            e.target.style.backgroundColor = 'rgba(0, 0, 0, 0.3)';
-            e.target.style.borderColor = 'rgba(0, 0, 0, 0.4)';
-            e.target.style.transform = 'translateX(-50%) translateY(0)';
-          }}
-        >
-          📍 Add Your Pin
-        </button>
-      )}
+      {children}
 
-      {/* Add Pin Overlay */}
-      {isAddPinOpen && (
-        <AddPinOverlay
-          isOpen={isAddPinOpen}
-          onClose={() => {
-            console.log('🔄 Closing Add Pin - resuming rotation');
-            setIsAddPinOpen(false);
-            rotationPaused.current = false; // Use ref, no re-render
-            // Resume rotation after a short delay
-            setTimeout(() => {
-              if (!userInteracting.current && mapInstance.current && enableAutoRotation && !rotationPaused.current) {
-                startRotation();
-              }
-            }, 1000);
-          }}
-          onAddPin={handleAddPin}
-          onLocationSelect={(location) => {
-            console.log('🎯 Location selected, stopping rotation and zooming:', location);
-            rotationPaused.current = true; // Use ref, no re-render
-            if (rotationRef.current) {
-              cancelAnimationFrame(rotationRef.current);
-              rotationRef.current = null;
-            }
-            
-            if (onLocationSelect) {
-              onLocationSelect(location);
-            }
-          }}
-          mapInstance={mapInstance}
-        />
-      )}
-
-      {/* Top 5 Locations Overlay */}
-      {showTop5 && (
-        <Top5Overlay
-          isOpen={showTop5}
-          onClose={() => setShowTop5(false)}
-          top5Data={top5Data}
-        />
-      )}
+      {/* CSS for animations */}
+      <style>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+        
+        @keyframes gentle-bounce {
+          0%, 100% { transform: translateY(0px); }
+          50% { transform: translateY(-8px); }
+        }
+      `}</style>
     </div>
   );
 };
