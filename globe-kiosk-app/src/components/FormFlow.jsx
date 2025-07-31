@@ -2,7 +2,7 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import ReactCountryFlag from 'react-country-flag';
 
-const FormFlow = ({ onFormSubmit, onLocationSelect, selectedLocation }) => {
+const FormFlow = ({ onFormSubmit, onLocationSelect, selectedLocation, resetTrigger }) => {
   const [currentStep, setCurrentStep] = useState(0);
   const [formData, setFormData] = useState({});
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
@@ -13,6 +13,7 @@ const FormFlow = ({ onFormSubmit, onLocationSelect, selectedLocation }) => {
   const [showKeyboard, setShowKeyboard] = useState(true); // Always show keyboard
   const [isShiftPressed, setIsShiftPressed] = useState(false);
   const [inactivityTimer, setInactivityTimer] = useState(null);
+  const [showValidationError, setShowValidationError] = useState(false); // NEW: Control when to show validation errors
   
   const containerRef = useRef(null);
   const inputRef = useRef(null);
@@ -74,6 +75,7 @@ const FormFlow = ({ onFormSubmit, onLocationSelect, selectedLocation }) => {
   // Handle location input change
   const handleLocationInputChange = useCallback((value) => {
     setFormData(prev => ({ ...prev, location: value }));
+    setShowValidationError(false); // Reset validation error when user types
     debouncedSearch(value);
   }, [debouncedSearch]);
 
@@ -128,35 +130,38 @@ const FormFlow = ({ onFormSubmit, onLocationSelect, selectedLocation }) => {
     }
   }, [showSuggestions, locationSuggestions, selectedSuggestionIndex, handleSuggestionSelect]);
 
-  // Inactivity timer - reset after 10 seconds of no interaction
+  // Inactivity timer - DISABLED: Let the Globe handle all timing
   const resetInactivityTimer = useCallback(() => {
-    if (inactivityTimer) {
-      clearTimeout(inactivityTimer);
-    }
-    
-    const timer = setTimeout(() => {
-      // Reset form and view
+    // DISABLED: Globe will handle the 2-minute timeout
+    // This prevents FormFlow from resetting while user is actively using the form
+    console.log('🔄 FormFlow timer reset (no-op - Globe handles timing)');
+  }, []); // SIMPLIFIED: No dependencies needed since this is now a no-op
+
+  // Handle reset requests from App when Globe timeout occurs
+  useEffect(() => {
+    if (resetTrigger > 0) {
+      console.log('🔄 FormFlow received reset trigger from App');
+      // Reset all form state
       setCurrentStep(0);
       setFormData({});
       setShowSuggestions(false);
       setSelectedSuggestionIndex(-1);
       setIsShiftPressed(false);
-      // Notify parent to reset view
-      onLocationSelect(null);
-    }, 10000); // 10 seconds
-    
-    setInactivityTimer(timer);
-  }, [inactivityTimer, onLocationSelect]);
+      setShowValidationError(false);
+      setShowKeyboard(true);
+    }
+  }, [resetTrigger]);
 
-  // Reset timer on any user interaction
+  // REMOVED: All inactivity timer logic - Globe handles timing
+
+  // Cleanup timer on unmount
   useEffect(() => {
-    resetInactivityTimer();
     return () => {
       if (inactivityTimer) {
         clearTimeout(inactivityTimer);
       }
     };
-  }, [formData, currentStep, showSuggestions]);
+  }, [inactivityTimer]);
 
   // Add event listeners for user interaction
   useEffect(() => {
@@ -174,6 +179,7 @@ const FormFlow = ({ onFormSubmit, onLocationSelect, selectedLocation }) => {
       document.removeEventListener('touchstart', handleUserInteraction);
     };
   }, [resetInactivityTimer]);
+  
   // Track container size for responsiveness
   useEffect(() => {
     if (!containerRef.current) return;
@@ -195,7 +201,10 @@ const FormFlow = ({ onFormSubmit, onLocationSelect, selectedLocation }) => {
   // Generate age options 1-99
   const ageOptions = Array.from({ length: 99 }, (_, i) => i + 1);
 
-  // Simplified form questions with age dropdown
+  // Gender options
+  const genderOptions = ['Male', 'Female', 'Non-binary', 'Other', 'Prefer not to say'];
+
+  // Simplified form questions with gender after name
   const questions = [
     {
       id: 'location',
@@ -209,6 +218,13 @@ const FormFlow = ({ onFormSubmit, onLocationSelect, selectedLocation }) => {
       type: 'text',
       question: 'What\'s your name?',
       placeholder: 'Enter your name',
+      required: true
+    },
+    {
+      id: 'gender', // NEW: Gender question after name
+      type: 'select',
+      question: 'What\'s your gender?',
+      options: genderOptions,
       required: true
     },
     {
@@ -280,15 +296,29 @@ const FormFlow = ({ onFormSubmit, onLocationSelect, selectedLocation }) => {
 
   const handleInputChange = useCallback((value) => {
     setFormData(prev => ({ ...prev, [currentQuestion.id]: value }));
-  }, [currentQuestion]);
+    setShowValidationError(false); // Reset validation error when user types
+    
+    // AUTO-ADVANCE: For dropdown selections (gender, age), automatically advance
+    if (currentQuestion.type === 'select' && value) {
+      console.log('🚀 Auto-advancing after dropdown selection:', currentQuestion.id, '=', value);
+      setTimeout(() => {
+        handleNext();
+      }, 500); // Small delay for better UX
+    }
+  }, [currentQuestion, handleNext]);
 
   const handleInputFocus = useCallback(() => {
-    // Always keep keyboard visible, no need to show/hide
-    resetInactivityTimer();
-  }, [resetInactivityTimer]);
+    // No-op for touch screens - no focus highlighting needed
+  }, []);
 
   const handleNext = useCallback(() => {
     resetInactivityTimer();
+    
+    // Check validation before proceeding
+    if (!canAdvance) {
+      setShowValidationError(true); // Show error only when user tries to submit
+      return;
+    }
     
     if (isLastStep) {
       const completeData = { ...formData, timestamp: new Date().toISOString() };
@@ -302,12 +332,17 @@ const FormFlow = ({ onFormSubmit, onLocationSelect, selectedLocation }) => {
         setCurrentStep(0);
         setFormData({});
         setShowKeyboard(true); // Ensure keyboard reappears
-        onLocationSelect(null); // Reset view
+        setShowValidationError(false);
+        // Only reset location if there was one selected
+        if (selectedLocation) {
+          onLocationSelect(null); // Reset view
+        }
       }, 3000); // 3 seconds to show "Pin Added"
     } else {
       setCurrentStep(prev => prev + 1);
+      setShowValidationError(false); // Reset validation error on successful advance
     }
-  }, [currentStep, isLastStep, formData, onFormSubmit, onLocationSelect, resetInactivityTimer, questions.length]);
+  }, [currentStep, isLastStep, formData, onFormSubmit, onLocationSelect, resetInactivityTimer, questions.length, canAdvance]);
 
   const handleCityClick = useCallback((city) => {
     const location = {
@@ -340,6 +375,7 @@ const FormFlow = ({ onFormSubmit, onLocationSelect, selectedLocation }) => {
       questionFontSize: Math.round(18 * fontScale),
       inputFontSize: Math.round(14 * fontScale),
       buttonFontSize: Math.round(15 * fontScale),
+      selectFontSize: Math.round(16 * fontScale), // INCREASED: Larger font for age dropdown
       cityNameFontSize: Math.round(12 * fontScale),
       visitorNameFontSize: Math.round(11 * fontScale),
       
@@ -467,8 +503,12 @@ const FormFlow = ({ onFormSubmit, onLocationSelect, selectedLocation }) => {
               onFocus={handleInputFocus}
               autoFocus
               style={{
-                ...getLocationInputStyle(responsiveStyles), // Use wider style for location
-                paddingRight: isLoadingSuggestions ? `${responsiveStyles.inputPadding + 30}px` : `${responsiveStyles.inputPadding}px`
+                ...getLocationInputStyle(responsiveStyles), // Removed active state
+                paddingTop: `${responsiveStyles.inputPadding}px`,
+                paddingBottom: `${responsiveStyles.inputPadding}px`,
+                paddingLeft: `${responsiveStyles.inputPadding + 2}px`,
+                paddingRight: isLoadingSuggestions ? 
+                  `${responsiveStyles.inputPadding + 30}px` : `${responsiveStyles.inputPadding + 2}px`
               }}
             />
             
@@ -494,11 +534,11 @@ const FormFlow = ({ onFormSubmit, onLocationSelect, selectedLocation }) => {
                     key={suggestion.id}
                     style={{
                       ...getSuggestionItemStyle(responsiveStyles),
-                      ...(index === selectedSuggestionIndex ? getSelectedSuggestionStyle() : {}),
-                      ...(index === locationSuggestions.length - 1 ? { borderBottom: 'none' } : {}) // Remove border on last item
+                      ...(index === selectedSuggestionIndex ? getSelectedSuggestionStyle() : {})
+                      // REMOVED: Border styling and hover effects
                     }}
                     onClick={() => handleSuggestionSelect(suggestion)}
-                    onMouseEnter={() => setSelectedSuggestionIndex(index)}
+                    // REMOVED: onMouseEnter hover effect
                   >
                     <div style={{ fontWeight: '500', marginBottom: '2px' }}>
                       {suggestion.shortName}
@@ -529,12 +569,10 @@ const FormFlow = ({ onFormSubmit, onLocationSelect, selectedLocation }) => {
               onChange={(e) => handleInputChange(e.target.value)}
               onFocus={handleInputFocus}
               autoFocus
-              style={{
-                ...getInputStyle(responsiveStyles),
-                ...(currentQuestion.id === 'contact' && !validateCurrentField() ? getInvalidInputStyle() : {})
-              }}
+              style={getInputStyle(responsiveStyles)} // Simple styling, no active states
             />
-            {currentQuestion.id === 'contact' && formData[currentQuestion.id] && !validateCurrentField() && (
+            {/* UPDATED: Only show validation error when showValidationError is true */}
+            {currentQuestion.id === 'contact' && showValidationError && formData[currentQuestion.id] && !validateCurrentField() && (
               <div style={getValidationErrorStyle(responsiveStyles)}>
                 Please enter a valid email (with @) or 10-digit phone number
               </div>
@@ -548,7 +586,6 @@ const FormFlow = ({ onFormSubmit, onLocationSelect, selectedLocation }) => {
             value={formData[currentQuestion.id] || ''}
             onChange={(e) => {
               handleInputChange(e.target.value);
-              resetInactivityTimer();
             }}
             autoFocus
             style={getSelectStyle(responsiveStyles)}
@@ -609,8 +646,8 @@ const FormFlow = ({ onFormSubmit, onLocationSelect, selectedLocation }) => {
                   {renderInput()}
                 </div>
 
-                {/* Next Button - Only shows for non-location steps */}
-                {currentQuestion.id !== 'location' && (
+                {/* Next Button - Only shows for text input fields (not dropdowns or location) */}
+                {currentQuestion.id !== 'location' && currentQuestion.type !== 'select' && (
                   <button
                     type="button"
                     style={{
@@ -638,10 +675,10 @@ const FormFlow = ({ onFormSubmit, onLocationSelect, selectedLocation }) => {
             )}
           </div>
 
-          {/* Stats Section with overlay when typing location */}
+          {/* Stats Section with overlay when past first step */}
           <div style={{
             ...getStatsSectionStyle(responsiveStyles),
-            ...(currentQuestion.id === 'location' && (formData.location || showSuggestions) ? getStatsOverlayStyle() : {})
+            ...(currentStep > 0 ? getStatsOverlayStyle() : {}) // CHANGED: Show overlay when past first step (not just during location input)
           }}>
             {/* Top Cities */}
             <div style={getStatsBlockStyle(responsiveStyles)}>
@@ -748,7 +785,7 @@ const FormFlow = ({ onFormSubmit, onLocationSelect, selectedLocation }) => {
   );
 };
 
-// UPDATED STYLE FUNCTIONS WITH CENTRALIZATION
+// UPDATED STYLE FUNCTIONS WITH CENTRALIZATION - REMOVED ALL ANIMATIONS
 
 const getContainerStyle = (styles) => ({
   color: 'white',
@@ -828,7 +865,7 @@ const getProgressDotStyle = (styles) => ({
   height: `${styles.dotSize}px`,
   borderRadius: '50%',
   background: 'rgba(255, 255, 255, 0.2)',
-  transition: 'all 0.3s ease'
+  // REMOVED: transition animation
 });
 
 const getActiveDotStyle = () => ({
@@ -867,23 +904,37 @@ const getInputStyle = (styles) => ({
   color: 'white',
   fontSize: `${styles.inputFontSize}px`,
   fontFamily: "'Inter', sans-serif",
-  transition: 'all 0.2s ease',
+  // REMOVED: transition animation
   outline: 'none',
   textAlign: 'center' // Center input text
 });
 
-// Special wider style for location input
+// Simple location input style - no hover/focus effects for touch screens
 const getLocationInputStyle = (styles) => ({
-  ...getInputStyle(styles),
-  width: '120%', // Make location input wider
-  maxWidth: '450px', // Set a reasonable max width
-  margin: '0 auto' // Center the wider input
+  width: '120%',
+  maxWidth: '450px',
+  margin: '0 auto',
+  paddingTop: `${styles.inputPadding}px`,
+  paddingBottom: `${styles.inputPadding}px`,
+  paddingLeft: `${styles.inputPadding + 2}px`,
+  paddingRight: `${styles.inputPadding + 2}px`,
+  background: 'rgba(255, 255, 255, 0.04)',
+  border: '1px solid rgba(255, 255, 255, 0.12)',
+  borderRadius: `${Math.round(10 * (styles.inputPadding / 12))}px`,
+  color: 'white',
+  fontSize: `${styles.inputFontSize}px`,
+  fontFamily: "'Inter', sans-serif",
+  outline: 'none',
+  textAlign: 'center'
 });
-
 
 const getNextButtonStyle = (styles) => ({
   width: '100%',
-  padding: `${styles.buttonPadding}px ${styles.buttonPadding + 4}px`,
+  // FIXED: Use individual padding properties
+  paddingTop: `${styles.buttonPadding}px`,
+  paddingBottom: `${styles.buttonPadding}px`,
+  paddingLeft: `${styles.buttonPadding + 4}px`,
+  paddingRight: `${styles.buttonPadding + 4}px`,
   background: 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)',
   border: 'none',
   borderRadius: `${Math.round(10 * (styles.buttonPadding / 12))}px`,
@@ -891,7 +942,7 @@ const getNextButtonStyle = (styles) => ({
   fontSize: `${styles.buttonFontSize}px`,
   fontWeight: '500',
   cursor: 'pointer',
-  transition: 'all 0.2s ease',
+  // REMOVED: transition animation
   fontFamily: "'Inter', sans-serif"
 });
 
@@ -941,7 +992,7 @@ const getCityCardStyle = (styles) => ({
   background: 'rgba(255, 255, 255, 0.02)',
   border: '1px solid rgba(255, 255, 255, 0.05)',
   borderRadius: `${Math.round(8 * (styles.inputPadding / 12))}px`,
-  transition: 'all 0.2s ease',
+  // REMOVED: transition animation
   cursor: 'pointer',
   width: '100%'
 });
@@ -992,7 +1043,7 @@ const getVisitorCardStyle = (styles) => ({
   padding: `${Math.round(10 * (styles.inputPadding / 12))}px`,
   background: 'rgba(255, 255, 255, 0.015)',
   borderRadius: `${Math.round(6 * (styles.inputPadding / 12))}px`,
-  transition: 'all 0.2s ease',
+  // REMOVED: transition animation
   width: '100%'
 });
 
@@ -1019,7 +1070,7 @@ const getVisitorTimeStyle = (styles) => ({
   marginRight: '10px'
 });
 
-// Keyboard styles (unchanged)
+// Keyboard styles - REMOVED ANIMATIONS
 const getKeyboardStyle = (styles) => ({
   backgroundColor: 'rgba(15, 15, 15, 0.95)',
   border: '1px solid rgba(255, 255, 255, 0.15)',
@@ -1056,7 +1107,7 @@ const getKeyboardKeyStyle = (styles, key) => {
     fontSize: `${Math.round(styles.inputFontSize * 0.9)}px`, // Slightly smaller font
     fontFamily: "'Inter', sans-serif",
     cursor: 'pointer',
-    transition: 'all 0.2s ease',
+    // REMOVED: transition animation
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1079,8 +1130,8 @@ const getSuggestionsStyle = (styles, showKeyboard, keyboardHeight) => ({
   top: '100%',
   left: 0,
   right: 0,
-  background: 'rgba(20, 20, 20, 0.95)', // Dark background, no white
-  border: '1px solid rgba(255, 255, 255, 0.12)', // Grey border to match other elements
+  background: 'rgba(20, 20, 20, 0.95)',
+  border: '1px solid rgba(255, 255, 255, 0.12)',
   borderRadius: `${Math.round(8 * (styles.inputPadding / 12))}px`,
   marginTop: '4px',
   height: 'auto',
@@ -1090,37 +1141,38 @@ const getSuggestionsStyle = (styles, showKeyboard, keyboardHeight) => ({
   backdropFilter: 'blur(10px)'
 });
 
+// UPDATED: Select style with individual padding properties
 const getSelectStyle = (styles) => ({
   ...getInputStyle(styles),
+  fontSize: `${styles.selectFontSize}px`, // LARGER font size for age dropdown
   cursor: 'pointer',
-  background: 'rgba(255, 255, 255, 0.04)', // Dark background like other inputs
-  border: '1px solid rgba(255, 255, 255, 0.12)', // Grey border
+  background: 'rgba(255, 255, 255, 0.04)',
+  border: '1px solid rgba(255, 255, 255, 0.12)',
   color: 'white',
-  // Remove default select styling
   appearance: 'none',
   backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e")`,
   backgroundRepeat: 'no-repeat',
   backgroundPosition: `right ${styles.inputPadding}px center`,
   backgroundSize: '16px',
-  paddingRight: `${styles.inputPadding + 24}px` // Make room for arrow
+  // FIXED: Override right padding for arrow space
+  paddingRight: `${styles.inputPadding + 24}px`
 });
 
-// Darker overlay style for stats section
+// Darker overlay style for stats section - REMOVED ANIMATION
 const getStatsOverlayStyle = () => ({
   position: 'relative',
-  opacity: 0.15, // Much darker overlay (less opacity = darker)
-  pointerEvents: 'none',
-  transition: 'opacity 0.3s ease'
+  opacity: 0.15,
+  pointerEvents: 'none'
 });
 
+// UPDATED: Suggestion item style - no borders, no animations
 const getSuggestionItemStyle = (styles) => ({
   padding: `${styles.inputPadding - 2}px ${styles.inputPadding}px`,
   cursor: 'pointer',
-  borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
-  transition: 'all 0.2s ease',
+  // REMOVED: borderBottom and transition animation
   fontSize: `${styles.inputFontSize}px`,
-  backgroundColor: 'transparent', // Remove any white background
-  color: 'white' // Ensure text is white
+  backgroundColor: 'transparent',
+  color: 'white'
 });
 
 const getSelectedSuggestionStyle = () => ({
@@ -1157,12 +1209,6 @@ const getPinAddedSubtitleStyle = (styles) => ({
   fontSize: `${styles.subtitleFontSize}px`,
   color: 'rgba(255, 255, 255, 0.7)',
   fontWeight: '300'
-});
-
-// Special validation error styles
-const getInvalidInputStyle = () => ({
-  borderColor: 'rgba(244, 67, 54, 0.5)',
-  backgroundColor: 'rgba(244, 67, 54, 0.05)'
 });
 
 const getValidationErrorStyle = (styles) => ({
