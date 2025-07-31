@@ -1,8 +1,8 @@
-// FormFlow.jsx - Centralized and Unified Layout
+// FormFlow.jsx - Updated to use dynamic metrics from pin data
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import ReactCountryFlag from 'react-country-flag';
 
-const FormFlow = ({ onFormSubmit, onLocationSelect, selectedLocation, resetTrigger }) => {
+const FormFlow = ({ onFormSubmit, onLocationSelect, selectedLocation, resetTrigger, metricsData }) => {
   const [currentStep, setCurrentStep] = useState(0);
   const [formData, setFormData] = useState({});
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
@@ -13,8 +13,8 @@ const FormFlow = ({ onFormSubmit, onLocationSelect, selectedLocation, resetTrigg
   const [showKeyboard, setShowKeyboard] = useState(true); // Always show keyboard
   const [isShiftPressed, setIsShiftPressed] = useState(false);
   const [inactivityTimer, setInactivityTimer] = useState(null);
-  const [showValidationError, setShowValidationError] = useState(false); // NEW: Control when to show validation errors
-  const [shouldAutoAdvance, setShouldAutoAdvance] = useState(false); // NEW: Fix for circular dependency
+  const [showValidationError, setShowValidationError] = useState(false);
+  const [shouldAutoAdvance, setShouldAutoAdvance] = useState(false); // Fix for circular dependency
   
   const containerRef = useRef(null);
   const inputRef = useRef(null);
@@ -173,8 +173,6 @@ const FormFlow = ({ onFormSubmit, onLocationSelect, selectedLocation, resetTrigg
     }
   }, [resetTrigger]);
 
-  // REMOVED: All inactivity timer logic - Globe handles timing
-
   // Cleanup timer on unmount
   useEffect(() => {
     return () => {
@@ -230,8 +228,8 @@ const FormFlow = ({ onFormSubmit, onLocationSelect, selectedLocation, resetTrigg
     {
       id: 'location',
       type: 'autocomplete',
-      question: 'Tap Keyboard Below',
-      placeholder: '',
+      question: 'Pick a place',
+      placeholder: 'Type your city...',
       required: true
     },
     {
@@ -242,7 +240,7 @@ const FormFlow = ({ onFormSubmit, onLocationSelect, selectedLocation, resetTrigg
       required: true
     },
     {
-      id: 'gender', // NEW: Gender question after name
+      id: 'gender',
       type: 'select',
       question: 'What\'s your gender?',
       options: genderOptions,
@@ -264,15 +262,15 @@ const FormFlow = ({ onFormSubmit, onLocationSelect, selectedLocation, resetTrigg
     }
   ];
 
-  // Top 3 highest pinned cities
-  const topCities = [
+  // NEW: Use dynamic metrics data from KioskGlobe, with fallback to static data
+  const topCities = metricsData?.topCities || [
     { rank: 1, city: "Dallas", country: "US", countryCode: "US", visitors: "2.4K" },
     { rank: 2, city: "Tokyo", country: "JP", countryCode: "JP", visitors: "1.8K" },
     { rank: 3, city: "London", country: "UK", countryCode: "GB", visitors: "1.6K" }
   ];
 
-  // Latest 3 pins/nations
-  const recentVisitors = [
+  // NEW: Use dynamic recent visitors data  
+  const recentVisitors = metricsData?.recentVisitors || [
     { name: "Sarah M.", city: "Paris", countryCode: "FR", time: "2m" },
     { name: "Alex K.", city: "Berlin", countryCode: "DE", time: "5m" },
     { name: "Maria L.", city: "São Paulo", countryCode: "BR", time: "8m" }
@@ -400,17 +398,17 @@ const FormFlow = ({ onFormSubmit, onLocationSelect, selectedLocation, resetTrigg
     const spacingScale = Math.max(0.6, Math.min(1.0, averageScale));
     
     return {
-      titleFontSize: Math.round(36 * fontScale),
-      subtitleFontSize: Math.round(18 * fontScale),
-      questionFontSize: Math.round(16 * fontScale),
-      inputFontSize: Math.round(12 * fontScale),
+      titleFontSize: Math.round(28 * fontScale),
+      subtitleFontSize: Math.round(16 * fontScale),
+      questionFontSize: Math.round(18 * fontScale),
+      inputFontSize: Math.round(14 * fontScale),
       buttonFontSize: Math.round(15 * fontScale),
       selectFontSize: Math.round(16 * fontScale), // INCREASED: Larger font for age dropdown
       cityNameFontSize: Math.round(12 * fontScale),
       visitorNameFontSize: Math.round(11 * fontScale),
       
       containerPadding: Math.round(32 * spacingScale),
-      sectionMargin: Math.round(24 * spacingScale),
+      sectionMargin: Math.round(32 * spacingScale),
       inputPadding: Math.round(14 * spacingScale),
       buttonPadding: Math.round(14 * spacingScale),
       
@@ -533,7 +531,7 @@ const FormFlow = ({ onFormSubmit, onLocationSelect, selectedLocation, resetTrigg
               onFocus={handleInputFocus}
               autoFocus
               style={{
-                ...getLocationInputStyle(responsiveStyles), // Removed active state
+                ...getLocationInputStyle(responsiveStyles),
                 paddingTop: `${responsiveStyles.inputPadding}px`,
                 paddingBottom: `${responsiveStyles.inputPadding}px`,
                 paddingLeft: `${responsiveStyles.inputPadding + 2}px`,
@@ -565,10 +563,8 @@ const FormFlow = ({ onFormSubmit, onLocationSelect, selectedLocation, resetTrigg
                     style={{
                       ...getSuggestionItemStyle(responsiveStyles),
                       ...(index === selectedSuggestionIndex ? getSelectedSuggestionStyle() : {})
-                      // REMOVED: Border styling and hover effects
                     }}
                     onClick={() => handleSuggestionSelect(suggestion)}
-                    // REMOVED: onMouseEnter hover effect
                   >
                     <div style={{ fontWeight: '500', marginBottom: '2px' }}>
                       {suggestion.shortName}
@@ -599,9 +595,8 @@ const FormFlow = ({ onFormSubmit, onLocationSelect, selectedLocation, resetTrigg
               onChange={(e) => handleInputChange(e.target.value)}
               onFocus={handleInputFocus}
               autoFocus
-              style={getInputStyle(responsiveStyles)} // Simple styling, no active states
+              style={getInputStyle(responsiveStyles)}
             />
-            {/* UPDATED: Only show validation error when showValidationError is true */}
             {currentQuestion.id === 'contact' && showValidationError && formData[currentQuestion.id] && !validateCurrentField() && (
               <div style={getValidationErrorStyle(responsiveStyles)}>
                 Please enter a valid email (with @) or 10-digit phone number
@@ -711,10 +706,10 @@ const FormFlow = ({ onFormSubmit, onLocationSelect, selectedLocation, resetTrigg
             )}
           </div>
 
-          {/* Stats Section with overlay when past first step */}
+          {/* Stats Section with overlay when past first step - NOW USING DYNAMIC DATA */}
           <div style={{
             ...getStatsSectionStyle(responsiveStyles),
-            ...(currentStep > 0 ? getStatsOverlayStyle() : {}) // CHANGED: Show overlay when past first step (not just during location input)
+            ...(currentStep > 0 ? getStatsOverlayStyle() : {})
           }}>
             {/* Top Cities */}
             <div style={getStatsBlockStyle(responsiveStyles)}>
@@ -807,7 +802,7 @@ const FormFlow = ({ onFormSubmit, onLocationSelect, selectedLocation, resetTrigg
         }
         
         select option:checked {
-          background-color: #1976d2 !important;
+          background-color: #dc2626 !important;
         }
         
         select::-webkit-scrollbar {
@@ -832,7 +827,7 @@ const FormFlow = ({ onFormSubmit, onLocationSelect, selectedLocation, resetTrigg
   );
 };
 
-// UPDATED STYLE FUNCTIONS WITH CENTRALIZATION - REMOVED ALL ANIMATIONS
+// STYLE FUNCTIONS - All remain the same but here's the complete set:
 
 const getContainerStyle = (styles) => ({
   color: 'white',
@@ -843,7 +838,7 @@ const getContainerStyle = (styles) => ({
   background: 'linear-gradient(180deg, #0a0a0a 0%, #1a1a1a 100%)',
   borderRight: '1px solid rgba(255, 255, 255, 0.08)',
   overflow: 'hidden',
-  paddingBottom: '16px' // Add bottom padding to the entire container
+  paddingBottom: '16px'
 });
 
 const getScrollableContentStyle = (styles, showKeyboard) => ({
@@ -851,23 +846,21 @@ const getScrollableContentStyle = (styles, showKeyboard) => ({
   overflowY: 'auto',
   overflowX: 'hidden',
   display: 'flex',
-  justifyContent: 'center', // Center horizontally
+  justifyContent: 'center',
   alignItems: 'flex-start',
   scrollbarWidth: 'none',
   msOverflowStyle: 'none'
 });
 
-// NEW: Centered content container with reduced outer margins
 const getCenteredContentStyle = (styles) => ({
   width: '100%',
   maxWidth: `${styles.maxContentWidth}px`,
-  padding: `${styles.containerPadding}px ${Math.round(styles.containerPadding * 0.5)}px`, // Reduced horizontal padding
+  padding: `${styles.containerPadding}px ${Math.round(styles.containerPadding * 0.5)}px`,
   display: 'flex',
   flexDirection: 'column',
-  alignItems: 'center' // Center all child elements
+  alignItems: 'center'
 });
 
-// UPDATED: Header section with center alignment
 const getHeaderStyle = (styles) => ({
   textAlign: 'center',
   marginBottom: `${styles.sectionMargin}px`,
@@ -878,7 +871,7 @@ const getFormSectionStyle = (styles) => ({
   width: '100%',
   display: 'flex',
   flexDirection: 'column',
-  alignItems: 'center', // Center form elements
+  alignItems: 'center',
   marginBottom: `${styles.sectionMargin}px`
 });
 
@@ -891,14 +884,13 @@ const getTitleStyle = (styles) => ({
   textAlign: 'center'
 });
 
-// NEW: Logo styling
 const getLogoStyle = (styles) => ({
   maxWidth: '100%',
   height: 'auto',
-  maxHeight: `${Math.round(styles.titleFontSize * 2.5)}px`, // Scale with responsive font size
+  maxHeight: `${Math.round(styles.titleFontSize * 2.5)}px`,
   marginBottom: '16px',
   display: 'block',
-  margin: '0 auto 16px auto' // Center the logo
+  margin: '0 auto 16px auto'
 });
 
 const getSubtitleStyle = (styles) => ({
@@ -921,17 +913,16 @@ const getProgressDotStyle = (styles) => ({
   width: `${styles.dotSize}px`,
   height: `${styles.dotSize}px`,
   borderRadius: '50%',
-  background: 'rgba(255, 255, 255, 0.2)',
-  // REMOVED: transition animation
+  background: 'rgba(255, 255, 255, 0.2)'
 });
 
 const getActiveDotStyle = () => ({
-  background: '#dc2626', // Changed from blue to red
+  background: '#dc2626',
   transform: 'scale(1.2)'
 });
 
 const getCompletedDotStyle = () => ({
-  background: '#f87171' // Changed from light blue to light red
+  background: '#f87171'
 });
 
 const getFormGroupStyle = (styles) => ({
@@ -956,16 +947,15 @@ const getInputStyle = (styles) => ({
   width: '100%',
   padding: `${styles.inputPadding}px ${styles.inputPadding + 2}px`,
   background: 'rgba(255, 255, 255, 0.04)',
-  border: 'none', // REMOVED: white border
+  border: 'none',
   borderRadius: `${Math.round(10 * (styles.inputPadding / 12))}px`,
   color: 'white',
   fontSize: `${styles.inputFontSize}px`,
   fontFamily: "'Inter', sans-serif",
   outline: 'none',
-  textAlign: 'center' // Center input text
+  textAlign: 'center'
 });
 
-// Simple location input style - no borders for touch screens
 const getLocationInputStyle = (styles) => ({
   width: '120%',
   maxWidth: '450px',
@@ -975,7 +965,7 @@ const getLocationInputStyle = (styles) => ({
   paddingLeft: `${styles.inputPadding + 2}px`,
   paddingRight: `${styles.inputPadding + 2}px`,
   background: 'rgba(255, 255, 255, 0.04)',
-  border: 'none', // REMOVED: white border
+  border: 'none',
   borderRadius: `${Math.round(10 * (styles.inputPadding / 12))}px`,
   color: 'white',
   fontSize: `${styles.inputFontSize}px`,
@@ -986,19 +976,17 @@ const getLocationInputStyle = (styles) => ({
 
 const getNextButtonStyle = (styles) => ({
   width: '100%',
-  // FIXED: Use individual padding properties
   paddingTop: `${styles.buttonPadding}px`,
   paddingBottom: `${styles.buttonPadding}px`,
   paddingLeft: `${styles.buttonPadding + 4}px`,
   paddingRight: `${styles.buttonPadding + 4}px`,
-  background: 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)', // Changed from blue to red gradient
+  background: 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)',
   border: 'none',
   borderRadius: `${Math.round(10 * (styles.buttonPadding / 12))}px`,
   color: 'white',
   fontSize: `${styles.buttonFontSize}px`,
   fontWeight: '500',
   cursor: 'pointer',
-  // REMOVED: transition animation
   fontFamily: "'Inter', sans-serif"
 });
 
@@ -1007,7 +995,6 @@ const getDisabledButtonStyle = () => ({
   cursor: 'not-allowed'
 });
 
-// NEW: Stats section with centering
 const getStatsSectionStyle = (styles) => ({
   width: '100%',
   display: 'flex',
@@ -1015,7 +1002,6 @@ const getStatsSectionStyle = (styles) => ({
   alignItems: 'center'
 });
 
-// NEW: Individual stats blocks
 const getStatsBlockStyle = (styles) => ({
   width: '100%',
   marginBottom: `${styles.sectionMargin * 0.8}px`,
@@ -1048,7 +1034,6 @@ const getCityCardStyle = (styles) => ({
   background: 'rgba(255, 255, 255, 0.02)',
   border: '1px solid rgba(255, 255, 255, 0.05)',
   borderRadius: `${Math.round(8 * (styles.inputPadding / 12))}px`,
-  // REMOVED: transition animation
   cursor: 'pointer',
   width: '100%'
 });
@@ -1056,7 +1041,7 @@ const getCityCardStyle = (styles) => ({
 const getCityRankStyle = (styles) => ({
   fontSize: `${Math.round(11 * (styles.cityNameFontSize / 12))}px`,
   fontWeight: '600',
-  color: '#f87171', // Changed from blue to light red
+  color: '#f87171',
   minWidth: `${Math.round(20 * (styles.inputPadding / 12))}px`,
   marginRight: `${Math.round(12 * (styles.inputPadding / 12))}px`,
   textAlign: 'center'
@@ -1082,7 +1067,7 @@ const getCityNameStyle = (styles) => ({
 
 const getCityCountStyle = (styles) => ({
   fontSize: `${Math.round(10 * (styles.cityNameFontSize / 12))}px`,
-  color: '#f87171', // Changed from blue to light red
+  color: '#f87171',
   fontWeight: '500'
 });
 
@@ -1099,7 +1084,6 @@ const getVisitorCardStyle = (styles) => ({
   padding: `${Math.round(10 * (styles.inputPadding / 12))}px`,
   background: 'rgba(255, 255, 255, 0.015)',
   borderRadius: `${Math.round(6 * (styles.inputPadding / 12))}px`,
-  // REMOVED: transition animation
   width: '100%'
 });
 
@@ -1121,27 +1105,26 @@ const getVisitorLocationStyle = (styles) => ({
 
 const getVisitorTimeStyle = (styles) => ({
   fontSize: `${Math.round(9 * (styles.visitorNameFontSize / 11))}px`,
-  color: 'rgba(248, 113, 113, 0.8)', // Changed from blue to red with opacity
+  color: 'rgba(248, 113, 113, 0.8)',
   fontWeight: '500',
   marginRight: '10px'
 });
 
-// Keyboard styles - REMOVED ANIMATIONS
 const getKeyboardStyle = (styles) => ({
   backgroundColor: 'rgba(15, 15, 15, 0.95)',
   border: '1px solid rgba(255, 255, 255, 0.15)',
   borderTop: '1px solid rgba(255, 255, 255, 0.2)',
   borderRadius: '12px 12px 8px 8px',
-  padding: `${Math.round(styles.containerPadding * 0.4)}px`, // Reduced padding
+  padding: `${Math.round(styles.containerPadding * 0.4)}px`,
   margin: `0 8px 8px 8px`,
   display: 'flex',
   flexDirection: 'column',
-  gap: `${Math.round(styles.containerPadding * 0.15)}px`, // Reduced gap
+  gap: `${Math.round(styles.containerPadding * 0.15)}px`,
   height: `${styles.keyboardHeight}px`,
   backdropFilter: 'blur(10px)',
   flexShrink: 0,
-  boxSizing: 'border-box', // Include padding/border in height calculation
-  overflow: 'hidden' // Prevent content from overflowing
+  boxSizing: 'border-box',
+  overflow: 'hidden'
 });
 
 const getKeyboardRowStyle = (styles) => ({
@@ -1158,16 +1141,15 @@ const getKeyboardKeyStyle = (styles, key) => {
   return {
     backgroundColor: 'rgba(255, 255, 255, 0.08)',
     border: '1px solid rgba(255, 255, 255, 0.15)',
-    borderRadius: `${Math.round(6 * (styles.inputPadding / 12))}px`, // Slightly smaller radius
+    borderRadius: `${Math.round(6 * (styles.inputPadding / 12))}px`,
     color: 'white',
-    fontSize: `${Math.round(styles.inputFontSize * 0.9)}px`, // Slightly smaller font
+    fontSize: `${Math.round(styles.inputFontSize * 0.9)}px`,
     fontFamily: "'Inter', sans-serif",
     cursor: 'pointer',
-    // REMOVED: transition animation
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: `${Math.round(36 * (styles.inputPadding / 12))}px`, // Reduced key height
+    minHeight: `${Math.round(36 * (styles.inputPadding / 12))}px`,
     flex: isSpace ? 3 : isSpecial ? 1.5 : 1,
     fontWeight: isSpecial ? '500' : '400',
     outline: 'none',
@@ -1177,8 +1159,8 @@ const getKeyboardKeyStyle = (styles, key) => {
 };
 
 const getKeyboardKeyActiveStyle = () => ({
-  backgroundColor: 'rgba(220, 38, 38, 0.3)', // Changed from blue to red
-  borderColor: 'rgba(220, 38, 38, 0.5)' // Changed from blue to red
+  backgroundColor: 'rgba(220, 38, 38, 0.3)',
+  borderColor: 'rgba(220, 38, 38, 0.5)'
 });
 
 const getSuggestionsStyle = (styles, showKeyboard, keyboardHeight) => ({
@@ -1187,7 +1169,7 @@ const getSuggestionsStyle = (styles, showKeyboard, keyboardHeight) => ({
   left: 0,
   right: 0,
   background: 'rgba(20, 20, 20, 0.95)',
-  border: 'none', // REMOVED: white border
+  border: 'none',
   borderRadius: `${Math.round(8 * (styles.inputPadding / 12))}px`,
   marginTop: '4px',
   height: 'auto',
@@ -1197,13 +1179,12 @@ const getSuggestionsStyle = (styles, showKeyboard, keyboardHeight) => ({
   backdropFilter: 'blur(10px)'
 });
 
-// UPDATED: Select style with better styling and no borders
 const getSelectStyle = (styles) => ({
   ...getInputStyle(styles),
-  fontSize: `${styles.selectFontSize}px`, // LARGER font size for dropdowns
+  fontSize: `${styles.selectFontSize}px`,
   cursor: 'pointer',
-  background: 'rgba(255, 255, 255, 0.08)', // Slightly more visible background
-  border: 'none', // REMOVED: white border
+  background: 'rgba(255, 255, 255, 0.08)',
+  border: 'none',
   color: 'white',
   appearance: 'none',
   backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e")`,
@@ -1211,35 +1192,31 @@ const getSelectStyle = (styles) => ({
   backgroundPosition: `right ${styles.inputPadding}px center`,
   backgroundSize: '16px',
   paddingRight: `${styles.inputPadding + 24}px`,
-  minHeight: `${Math.round(48 * (styles.inputPadding / 12))}px`, // Better height for touch
+  minHeight: `${Math.round(48 * (styles.inputPadding / 12))}px`,
   display: 'flex',
   alignItems: 'center'
 });
 
-// Darker overlay style for stats section - REMOVED ANIMATION
 const getStatsOverlayStyle = () => ({
   position: 'relative',
   opacity: 0.15,
   pointerEvents: 'none'
 });
 
-// UPDATED: Suggestion item style - no borders, no animations
 const getSuggestionItemStyle = (styles) => ({
   padding: `${styles.inputPadding - 2}px ${styles.inputPadding}px`,
   cursor: 'pointer',
-  // REMOVED: borderBottom and transition animation
   fontSize: `${styles.inputFontSize}px`,
   backgroundColor: 'transparent',
   color: 'white'
 });
 
 const getSelectedSuggestionStyle = () => ({
-  background: 'rgba(220, 38, 38, 0.2)', // Changed from blue to red
-  borderColor: 'rgba(220, 38, 38, 0.3)', // Changed from blue to red
-  backgroundColor: 'rgba(220, 38, 38, 0.15)' // Changed from blue to red
+  background: 'rgba(220, 38, 38, 0.2)',
+  borderColor: 'rgba(220, 38, 38, 0.3)',
+  backgroundColor: 'rgba(220, 38, 38, 0.15)'
 });
 
-// Pin Added confirmation styles
 const getPinAddedStyle = (styles) => ({
   display: 'flex',
   flexDirection: 'column',
@@ -1258,7 +1235,7 @@ const getPinAddedIconStyle = (styles) => ({
 const getPinAddedTitleStyle = (styles) => ({
   fontSize: `${Math.round(styles.titleFontSize * 1.2)}px`,
   fontWeight: '500',
-  color: '#f87171', // Changed from blue to light red
+  color: '#f87171',
   marginBottom: `${styles.inputPadding / 2}px`,
   letterSpacing: '0.02em'
 });
@@ -1277,13 +1254,11 @@ const getValidationErrorStyle = (styles) => ({
   fontWeight: '400'
 });
 
-// NEW: Placeholder styling for disabled select options
 const getSelectPlaceholderStyle = () => ({
   color: 'rgba(255, 255, 255, 0.5)',
   fontStyle: 'italic'
 });
 
-// NEW: Regular option styling
 const getSelectOptionStyle = () => ({
   color: 'white',
   backgroundColor: '#1a1a1a'

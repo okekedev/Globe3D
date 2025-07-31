@@ -1,5 +1,5 @@
 // App.jsx - Updated with Pin Management Integration
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import './App.css';
 import KioskGlobe from './components/KioskGlobe';
 import FormFlow from './components/FormFlow';
@@ -36,11 +36,11 @@ function App() {
     setResetTrigger(prev => prev + 1); // Increment to trigger reset in FormFlow
   };
 
-  // NEW: Handle metrics updates from KioskGlobe
-  const handleMetricsUpdate = (metrics) => {
+  // NEW: Handle metrics updates from KioskGlobe - STABILIZED
+  const handleMetricsUpdate = useCallback((metrics) => {
     console.log('📊 Metrics updated:', metrics);
     setMetricsData(metrics);
-  };
+  }, []);
 
   return (
     <div className="app-container">

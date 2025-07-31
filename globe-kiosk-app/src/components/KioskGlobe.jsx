@@ -1,9 +1,194 @@
-// KioskGlobe.jsx - Fixed 30-second zoom animation behavior
+// KioskGlobe.jsx - Your implementation with pin management system added
 import React, { useRef, useState, useCallback, useEffect } from 'react';
+import ReactCountryFlag from 'react-country-flag';
+import { createRoot } from 'react-dom/client';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 
-// MEMOIZED COMPONENT TO PREVENT UNNECESSARY RE-RENDERS
+// Demo pin data - 100+ pins around the globe with clustering
+const generateDemoPins = () => {
+  // City definitions with pin counts
+  const cityDefinitions = [
+    // Top cities (matching FormFlow metrics) - using proper country codes
+    { name: "Dallas", country: "US", state: "TX", countryCode: "US", coords: [-96.7970, 32.7767], pinCount: 24 },
+    { name: "Tokyo", country: "JP", state: "Tokyo", countryCode: "JP", coords: [139.6917, 35.6895], pinCount: 18 },
+    { name: "London", country: "UK", state: "England", countryCode: "GB", coords: [-0.1276, 51.5074], pinCount: 16 },
+    
+    // Major cities with multiple pins
+    { name: "New York", country: "US", state: "NY", countryCode: "US", coords: [-74.0060, 40.7128], pinCount: 12 },
+    { name: "Los Angeles", country: "US", state: "CA", countryCode: "US", coords: [-118.2437, 34.0522], pinCount: 10 },
+    { name: "Paris", country: "FR", state: "Île-de-France", countryCode: "FR", coords: [2.3522, 48.8566], pinCount: 9 },
+    { name: "Berlin", country: "DE", state: "Berlin", countryCode: "DE", coords: [13.4050, 52.5200], pinCount: 8 },
+    { name: "São Paulo", country: "BR", state: "São Paulo", countryCode: "BR", coords: [-46.6333, -23.5505], pinCount: 7 },
+    { name: "Sydney", country: "AU", state: "NSW", countryCode: "AU", coords: [151.2093, -33.8688], pinCount: 6 },
+    { name: "Dubai", country: "AE", state: "Dubai", countryCode: "AE", coords: [55.2708, 25.2048], pinCount: 5 },
+    
+    // Medium cities
+    { name: "Chicago", country: "US", state: "IL", countryCode: "US", coords: [-87.6298, 41.8781], pinCount: 4 },
+    { name: "Toronto", country: "CA", state: "ON", countryCode: "CA", coords: [-79.3832, 43.6532], pinCount: 4 },
+    { name: "Mumbai", country: "IN", state: "Maharashtra", countryCode: "IN", coords: [72.8777, 19.0760], pinCount: 4 },
+    { name: "Shanghai", country: "CN", state: "Shanghai", countryCode: "CN", coords: [121.4737, 31.2304], pinCount: 3 },
+    { name: "Amsterdam", country: "NL", state: "North Holland", countryCode: "NL", coords: [4.9041, 52.3676], pinCount: 3 },
+    { name: "Stockholm", country: "SE", state: "Stockholm", countryCode: "SE", coords: [18.0686, 59.3293], pinCount: 3 },
+    { name: "Singapore", country: "SG", state: "Singapore", countryCode: "SG", coords: [103.8198, 1.3521], pinCount: 3 },
+    { name: "Mexico City", country: "MX", state: "CDMX", countryCode: "MX", coords: [-99.1332, 19.4326], pinCount: 3 },
+    
+    // Cities with 2 pins
+    { name: "Vancouver", country: "CA", state: "BC", countryCode: "CA", coords: [-123.1207, 49.2827], pinCount: 2 },
+    { name: "Miami", country: "US", state: "FL", countryCode: "US", coords: [-80.1918, 25.7617], pinCount: 2 },
+    { name: "Madrid", country: "ES", state: "Madrid", countryCode: "ES", coords: [-3.7038, 40.4168], pinCount: 2 },
+    { name: "Rome", country: "IT", state: "Lazio", countryCode: "IT", coords: [12.4964, 41.9028], pinCount: 2 },
+    { name: "Bangkok", country: "TH", state: "Bangkok", countryCode: "TH", coords: [100.5018, 13.7563], pinCount: 2 },
+    { name: "Seoul", country: "KR", state: "Seoul", countryCode: "KR", coords: [126.9780, 37.5665], pinCount: 2 },
+    { name: "Cairo", country: "EG", state: "Cairo", countryCode: "EG", coords: [31.2357, 30.0444], pinCount: 2 },
+    { name: "Buenos Aires", country: "AR", state: "Buenos Aires", countryCode: "AR", coords: [-58.3816, -34.6037], pinCount: 2 },
+    
+    // Single pins scattered globally (30 more cities)
+    { name: "Oslo", country: "NO", state: "Oslo", countryCode: "NO", coords: [10.7522, 59.9139], pinCount: 1 },
+    { name: "Helsinki", country: "FI", state: "Uusimaa", countryCode: "FI", coords: [24.9384, 60.1699], pinCount: 1 },
+    { name: "Copenhagen", country: "DK", state: "Capital", countryCode: "DK", coords: [12.5683, 55.6761], pinCount: 1 },
+    { name: "Zurich", country: "CH", state: "Zurich", countryCode: "CH", coords: [8.5417, 47.3769], pinCount: 1 },
+    { name: "Vienna", country: "AT", state: "Vienna", countryCode: "AT", coords: [16.3738, 48.2082], pinCount: 1 },
+    { name: "Prague", country: "CZ", state: "Prague", countryCode: "CZ", coords: [14.4378, 50.0755], pinCount: 1 },
+    { name: "Warsaw", country: "PL", state: "Mazovia", countryCode: "PL", coords: [21.0122, 52.2297], pinCount: 1 },
+    { name: "Budapest", country: "HU", state: "Budapest", countryCode: "HU", coords: [19.0402, 47.4979], pinCount: 1 },
+    { name: "Lisbon", country: "PT", state: "Lisbon", countryCode: "PT", coords: [-9.1393, 38.7223], pinCount: 1 },
+    { name: "Athens", country: "GR", state: "Attica", countryCode: "GR", coords: [23.7275, 37.9838], pinCount: 1 },
+    { name: "Istanbul", country: "TR", state: "Istanbul", countryCode: "TR", coords: [28.9784, 41.0082], pinCount: 1 },
+    { name: "Tel Aviv", country: "IL", state: "Tel Aviv", countryCode: "IL", coords: [34.7818, 32.0853], pinCount: 1 },
+    { name: "Cape Town", country: "ZA", state: "Western Cape", countryCode: "ZA", coords: [18.4241, -33.9249], pinCount: 1 },
+    { name: "Lagos", country: "NG", state: "Lagos", countryCode: "NG", coords: [3.3792, 6.5244], pinCount: 1 },
+    { name: "Hong Kong", country: "HK", state: "Hong Kong", countryCode: "HK", coords: [114.1694, 22.3193], pinCount: 1 },
+    { name: "Manila", country: "PH", state: "Metro Manila", countryCode: "PH", coords: [120.9842, 14.5995], pinCount: 1 },
+    { name: "Jakarta", country: "ID", state: "Jakarta", countryCode: "ID", coords: [106.8451, -6.2088], pinCount: 1 },
+    { name: "Kuala Lumpur", country: "MY", state: "Kuala Lumpur", countryCode: "MY", coords: [101.6869, 3.1390], pinCount: 1 },
+    { name: "Ho Chi Minh City", country: "VN", state: "Ho Chi Minh", countryCode: "VN", coords: [106.6297, 10.8231], pinCount: 1 },
+    { name: "Bangalore", country: "IN", state: "Karnataka", countryCode: "IN", coords: [77.5946, 12.9716], pinCount: 1 },
+    { name: "Delhi", country: "IN", state: "Delhi", countryCode: "IN", coords: [77.1025, 28.7041], pinCount: 1 },
+    { name: "Karachi", country: "PK", state: "Sindh", countryCode: "PK", coords: [67.0011, 24.8607], pinCount: 1 },
+    { name: "Riyadh", country: "SA", state: "Riyadh", countryCode: "SA", coords: [46.6753, 24.7136], pinCount: 1 },
+    { name: "Kuwait City", country: "KW", state: "Kuwait", countryCode: "KW", coords: [47.9774, 29.3759], pinCount: 1 },
+    { name: "Doha", country: "QA", state: "Doha", countryCode: "QA", coords: [51.5310, 25.2854], pinCount: 1 },
+    { name: "Nairobi", country: "KE", state: "Nairobi", countryCode: "KE", coords: [36.8219, -1.2921], pinCount: 1 },
+    { name: "Addis Ababa", country: "ET", state: "Addis Ababa", countryCode: "ET", coords: [38.7369, 9.1450], pinCount: 1 },
+    { name: "Lima", country: "PE", state: "Lima", countryCode: "PE", coords: [-77.0428, -12.0464], pinCount: 1 },
+    { name: "Bogotá", country: "CO", state: "Bogotá", countryCode: "CO", coords: [-74.0721, 4.7110], pinCount: 1 },
+    { name: "Santiago", country: "CL", state: "Santiago", countryCode: "CL", coords: [-70.6693, -33.4489], pinCount: 1 },
+    { name: "Montevideo", country: "UY", state: "Montevideo", countryCode: "UY", coords: [-56.1645, -34.9011], pinCount: 1 },
+    { name: "Auckland", country: "NZ", state: "Auckland", countryCode: "NZ", coords: [174.7633, -36.8485], pinCount: 1 },
+    { name: "Wellington", country: "NZ", state: "Wellington", countryCode: "NZ", coords: [174.7762, -41.2865], pinCount: 1 },
+    { name: "Perth", country: "AU", state: "WA", countryCode: "AU", coords: [115.8605, -31.9505], pinCount: 1 },
+    { name: "Brisbane", country: "AU", state: "QLD", countryCode: "AU", coords: [153.0251, -27.4698], pinCount: 1 },
+    { name: "Melbourne", country: "AU", state: "VIC", countryCode: "AU", coords: [144.9631, -37.8136], pinCount: 1 },
+  ];
+
+  // Generate individual pin objects with names and timestamps
+  const allPins = [];
+  let pinId = 1;
+
+  cityDefinitions.forEach(city => {
+    for (let i = 0; i < city.pinCount; i++) {
+      // Add slight coordinate variation for multiple pins in same city
+      const coordVariation = city.pinCount > 1 ? (Math.random() - 0.5) * 0.02 : 0;
+      
+      // Create individual pin object
+      const pin = {
+        id: pinId++,
+        cityName: city.name,
+        country: city.country,
+        state: city.state,
+        countryCode: city.countryCode,
+        coordinates: [
+          city.coords[0] + coordVariation,
+          city.coords[1] + coordVariation
+        ],
+        timestamp: new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000), // Random within last week
+        userName: generateRandomName(),
+        totalCityPins: city.pinCount
+      };
+      
+      allPins.push(pin);
+    }
+  });
+
+  // Sort by newest first for recent visitors calculation
+  return allPins.sort((a, b) => b.timestamp - a.timestamp);
+};
+
+// Generate random names for demo
+const generateRandomName = () => {
+  const firstNames = ['Sarah', 'Alex', 'Maria', 'John', 'Emma', 'David', 'Lisa', 'Mike', 'Anna', 'Chris', 'Sophie', 'Ryan', 'Elena', 'James', 'Nina', 'Tom', 'Julia', 'Sam', 'Zara', 'Ben'];
+  const lastInitials = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  
+  const firstName = firstNames[Math.floor(Math.random() * firstNames.length)];
+  const lastInitial = lastInitials[Math.floor(Math.random() * lastInitials.length)];
+  
+  return `${firstName} ${lastInitial}.`;
+};
+
+// Get top cities for metrics sync
+const getTopCities = (pins) => {
+  const cityStats = {};
+  
+  pins.forEach(pin => {
+    const key = pin.cityName;
+    if (!cityStats[key]) {
+      cityStats[key] = {
+        city: pin.cityName,
+        country: pin.country,
+        state: pin.state,
+        countryCode: pin.countryCode,
+        count: 0,
+        latestPin: pin.timestamp
+      };
+    }
+    cityStats[key].count++;
+    if (pin.timestamp > cityStats[key].latestPin) {
+      cityStats[key].latestPin = pin.timestamp;
+    }
+  });
+  
+  return Object.values(cityStats)
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 3)
+    .map((city, index) => ({
+      rank: index + 1,
+      city: city.city,
+      country: city.country,
+      countryCode: city.countryCode, // Use proper country code for ReactCountryFlag
+      visitors: `${(city.count * 100).toLocaleString()}`, // Multiply for demo metrics
+      state: city.state,
+      pinCount: city.count,
+      latestTime: getTimeAgo(city.latestPin)
+    }));
+};
+
+// Get recent visitor data
+const getRecentVisitors = (pins) => {
+  return pins
+    .slice(0, 3) // Get 3 most recent
+    .map(pin => ({
+      name: pin.userName,
+      city: pin.cityName,
+      countryCode: pin.countryCode, // Use countryCode instead of flag
+      time: getTimeAgo(pin.timestamp)
+    }));
+};
+
+// Helper function to get time ago
+const getTimeAgo = (timestamp) => {
+  const now = new Date();
+  const diffMs = now - new Date(timestamp);
+  const diffMins = Math.floor(diffMs / (1000 * 60));
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  
+  if (diffMins < 60) return `${diffMins}m`;
+  if (diffHours < 24) return `${diffHours}h`;
+  return `${diffDays}d`;
+};
+
+// MEMOIZED COMPONENT TO PREVENT UNNECESSARY RE-RENDERS - FIXED
 const KioskGlobe = React.memo(({
   className = '',
   containerStyle = {},
@@ -11,13 +196,15 @@ const KioskGlobe = React.memo(({
   selectedLocation = null,
   pins = [],
   children,
-  onFormReset // NEW: Callback to reset the form when timeout occurs
+  onFormReset, // Callback to reset the form when timeout occurs
+  onMetricsUpdate // NEW: Callback to update metrics in FormFlow
 }) => {
   console.log('🌍 Kiosk Globe rendering');
 
   // State
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [globalPins, setGlobalPins] = useState([]); // NEW: Global pins state
 
   // Refs - USING REFS INSTEAD OF STATE TO AVOID RE-RENDERS
   const mapContainer = useRef(null);
@@ -26,18 +213,171 @@ const KioskGlobe = React.memo(({
   const zoomTimeoutRef = useRef(null);
   const initialized = useRef(false);
   const isZoomedInRef = useRef(false); // CHANGED FROM STATE TO REF
-  
+  const markersRef = useRef(new Map()); // NEW: Track markers
 
   // Get token from environment
   const mapboxToken = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN;
 
-  // Debug token info
-  console.log('🔑 Kiosk Token info:', {
-    exists: !!mapboxToken,
-    length: mapboxToken?.length,
-    valid: mapboxToken?.startsWith('pk.'),
-    preview: mapboxToken?.substring(0, 20) + '...'
-  });
+  // Debug token info - ONLY LOG ONCE
+  useEffect(() => {
+    console.log('🔑 Kiosk Token info:', {
+      exists: !!mapboxToken,
+      length: mapboxToken?.length,
+      valid: mapboxToken?.startsWith('pk.'),
+      preview: mapboxToken?.substring(0, 20) + '...'
+    });
+  }, []); // Empty dependency array - only run once
+
+  // Initialize demo pins on mount - ONLY ONCE
+  useEffect(() => {
+    if (globalPins.length > 0) return; // Don't regenerate if already has pins
+    
+    const demoPins = generateDemoPins();
+    setGlobalPins(demoPins);
+    
+    // Update metrics in FormFlow if callback provided
+    if (onMetricsUpdate) {
+      const topCities = getTopCities(demoPins);
+      const recentVisitors = getRecentVisitors(demoPins);
+      onMetricsUpdate({ topCities, recentVisitors });
+    }
+  }, []); // EMPTY dependency array - only run on mount
+
+  // Add/update pins on map
+  const updatePinsOnMap = useCallback(() => {
+    if (!mapInstance.current || globalPins.length === 0) return;
+
+    console.log('📍 Adding pins to map:', globalPins.length);
+
+    // Clear existing markers
+    markersRef.current.forEach(marker => marker.remove());
+    markersRef.current.clear();
+
+    // Group pins by city for clustering
+    const cityGroups = {};
+    globalPins.forEach(pin => {
+      const key = `${pin.cityName}-${pin.country}`;
+      if (!cityGroups[key]) {
+        cityGroups[key] = [];
+      }
+      cityGroups[key].push(pin);
+    });
+
+    // Add markers to map
+    Object.values(cityGroups).forEach(cityPins => {
+      if (cityPins.length === 1) {
+        // Single pin - simple red marker
+        const pin = cityPins[0];
+        const marker = new mapboxgl.Marker({ color: '#dc2626' }) // Red color
+          .setLngLat(pin.coordinates)
+          .addTo(mapInstance.current);
+
+        // Add popup for single pins using React component
+        const popupContainer = document.createElement('div');
+        const root = createRoot(popupContainer);
+        
+        root.render(
+          <div style={{ fontFamily: "'Inter', sans-serif", padding: '8px' }}>
+            <h3 style={{ margin: '0 0 8px 0', fontSize: '14px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <ReactCountryFlag 
+                countryCode={pin.countryCode}
+                svg
+                style={{ width: '16px', height: '12px' }}
+              />
+              {pin.cityName}, {pin.state}
+            </h3>
+            <p style={{ margin: '0', fontSize: '12px', color: '#666' }}>
+              📍 {pin.userName}<br />
+              🕐 {getTimeAgo(pin.timestamp)}
+            </p>
+          </div>
+        );
+
+        const popup = new mapboxgl.Popup({ offset: 25 })
+          .setDOMContent(popupContainer);
+
+        marker.setPopup(popup);
+        markersRef.current.set(pin.id, marker);
+
+      } else {
+        // Multiple pins - use representative coordinates and custom popup
+        const mainPin = cityPins[0];
+        const latestPin = cityPins.sort((a, b) => b.timestamp - a.timestamp)[0];
+        
+        const marker = new mapboxgl.Marker({ color: '#dc2626' })
+          .setLngLat(mainPin.coordinates)
+          .addTo(mapInstance.current);
+
+        // Custom popup for multiple pins using React component
+        const popupContainer = document.createElement('div');
+        const root = createRoot(popupContainer);
+        
+        root.render(
+          <div style={{ fontFamily: "'Inter', sans-serif", padding: '12px', minWidth: '200px' }}>
+            <h3 style={{ margin: '0 0 8px 0', fontSize: '16px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <ReactCountryFlag 
+                countryCode={mainPin.countryCode}
+                svg
+                style={{ width: '18px', height: '14px' }}
+              />
+              {mainPin.cityName}, {mainPin.state}
+            </h3>
+            <div style={{ margin: '8px 0', padding: '8px', background: '#f5f5f5', borderRadius: '6px' }}>
+              <strong style={{ color: '#dc2626', fontSize: '18px' }}>{cityPins.length}</strong>
+              <span style={{ fontSize: '12px', color: '#666', marginLeft: '4px' }}>pins</span>
+            </div>
+            <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#666' }}>
+              🕐 Latest: {latestPin.userName} ({getTimeAgo(latestPin.timestamp)})
+            </p>
+          </div>
+        );
+
+        const popup = new mapboxgl.Popup({ offset: 25 })
+          .setDOMContent(popupContainer);
+
+        marker.setPopup(popup);
+        markersRef.current.set(mainPin.id, marker);
+      }
+    });
+
+  }, [globalPins]);
+
+  // Update pins when globalPins changes
+  useEffect(() => {
+    updatePinsOnMap();
+  }, [updatePinsOnMap]);
+
+  // Add a new pin (called from FormFlow) - STABILIZED
+  const addNewPin = useCallback((locationData, userData) => {
+    const newPin = {
+      id: Date.now(),
+      cityName: locationData.shortName || locationData.name,
+      country: 'US', // Default - could be enhanced with geocoding
+      state: 'Unknown',
+      countryCode: 'US', // Default country code
+      coordinates: [locationData.lng, locationData.lat],
+      timestamp: new Date(),
+      userName: userData.name || 'Anonymous',
+      totalCityPins: 1
+    };
+
+    setGlobalPins(prev => {
+      const updated = [newPin, ...prev];
+      
+      // Update metrics - but prevent infinite loops
+      setTimeout(() => {
+        if (onMetricsUpdate) {
+          const topCities = getTopCities(updated);
+          const recentVisitors = getRecentVisitors(updated);
+          onMetricsUpdate({ topCities, recentVisitors });
+        }
+      }, 0);
+      
+      return updated;
+    });
+
+    console.log('📍 Added new pin:', newPin);
+  }, []); // EMPTY dependency array to prevent re-renders
 
   // Smooth rotation animation - PREVENT MULTIPLE STARTS
   const startAnimation = useCallback(() => {
@@ -121,7 +461,7 @@ const KioskGlobe = React.memo(({
 
       const map = new mapboxgl.Map({
         container: mapContainer.current,
-        style: 'mapbox://styles/okekec21/cmd63rz9p00sd01qn2kcefwj0',
+        style: 'mapbox://styles/okekec21/cmd63rz9p00sd01qn2kcefwj0', // Your custom style
         center: [0, 0],
         zoom: 1.8,
         pitch: 0,
@@ -165,7 +505,9 @@ const KioskGlobe = React.memo(({
 
         setIsLoading(false);
         
-        // REMOVED: Auto-start animation on load - let it start naturally
+        // Add pins to map after load
+        updatePinsOnMap();
+        
         console.log('🎯 Map loaded, not starting rotation yet');
       });
 
@@ -181,7 +523,7 @@ const KioskGlobe = React.memo(({
       setIsLoading(false);
       initialized.current = false;
     }
-  }, [mapboxToken, startAnimation, enableAutoRotation]);
+  }, [mapboxToken, updatePinsOnMap]);
 
   // Handle window resize to make globe responsive - STABILIZED DEPENDENCIES
   const handleResize = useCallback(() => {
@@ -306,11 +648,14 @@ const KioskGlobe = React.memo(({
         mapInstance.current.remove();
         mapInstance.current = null;
       }
+      // Clear all markers
+      markersRef.current.forEach(marker => marker.remove());
+      markersRef.current.clear();
       initialized.current = false;
     };
   }, [mapboxToken, createMap, stopAnimation, handleResize]); // REMOVED CHANGING DEPENDENCIES
 
-  // UPDATED: Handle location changes with 30-second zoom animation
+  // UPDATED: Handle location changes with 20-second zoom animation
   useEffect(() => {
     if (selectedLocation && mapInstance.current) {
       console.log('🎯 Kiosk syncing to location:', selectedLocation);
@@ -349,7 +694,7 @@ const KioskGlobe = React.memo(({
       // User finished form or reset - zoom out immediately
       console.log('👤 User finished or reset, zooming out now');
       
-      // Clear the 30-second timeout since user finished early
+      // Clear the timeout since user finished early
       if (zoomTimeoutRef.current) {
         clearTimeout(zoomTimeoutRef.current);
         zoomTimeoutRef.current = null;
@@ -357,7 +702,7 @@ const KioskGlobe = React.memo(({
       
       zoomOutToDefault();
     }
-  }, [selectedLocation, stopAnimation, zoomOutToDefault]); // REMOVED isZoomedIn DEPENDENCY
+  }, [selectedLocation, stopAnimation, zoomOutToDefault, onFormReset]); // REMOVED isZoomedIn DEPENDENCY
 
   // NEW: Start initial rotation when map is ready and no location selected - PREVENT DURING ZOOM
   useEffect(() => {
@@ -438,6 +783,13 @@ const KioskGlobe = React.memo(({
     setTimeout(createMap, 100);
   }, [createMap, stopAnimation]);
 
+  // Expose addNewPin method to parent
+  useEffect(() => {
+    if (mapInstance.current && addNewPin) {
+      mapInstance.current.addNewPin = addNewPin;
+    }
+  }, [addNewPin]);
+
   return (
     <div 
       className={`kiosk-globe-container ${className}`}
@@ -461,6 +813,22 @@ const KioskGlobe = React.memo(({
           left: 0
         }}
       />
+
+      {/* Pin count indicator */}
+      <div style={{
+        position: 'absolute',
+        top: '20px',
+        right: '20px',
+        background: 'rgba(0, 0, 0, 0.7)',
+        color: 'white',
+        padding: '8px 12px',
+        borderRadius: '6px',
+        fontSize: '12px',
+        fontFamily: "'Inter', sans-serif",
+        zIndex: 1000
+      }}>
+        📍 {globalPins.length} pins worldwide
+      </div>
 
       {/* Loading overlay */}
       {isLoading && (
@@ -546,6 +914,15 @@ const KioskGlobe = React.memo(({
         }
       `}</style>
     </div>
+  );
+}, (prevProps, nextProps) => {
+  // Custom comparison function to prevent unnecessary re-renders
+  return (
+    prevProps.className === nextProps.className &&
+    prevProps.enableAutoRotation === nextProps.enableAutoRotation &&
+    prevProps.selectedLocation?.lng === nextProps.selectedLocation?.lng &&
+    prevProps.selectedLocation?.lat === nextProps.selectedLocation?.lat &&
+    prevProps.pins?.length === nextProps.pins?.length
   );
 });
 
