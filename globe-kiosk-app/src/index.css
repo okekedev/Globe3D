@@ -2,7 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Updated root styles for full-screen kiosk */
+/* Updated root styles for side-by-side layout */
 #root {
   width: 100vw;
   height: 100vh;
@@ -12,14 +12,14 @@
   position: relative;
 }
 
-/* Reset for full-screen kiosk experience */
+/* Reset for full-screen experience */
 html, body {
   margin: 0;
   padding: 0;
   height: 100%;
   width: 100%;
   overflow: hidden;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
     'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
     sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -36,7 +36,7 @@ html, body {
 }
 
 /* Enable text selection for input fields */
-input, textarea {
+input, textarea, select {
   -webkit-user-select: text;
   -moz-user-select: text;
   -ms-user-select: text;
@@ -49,26 +49,5 @@ input, textarea {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Ensure globe container takes full screen and centers content */
-.globe-view-container {
-  width: 100vw !important;
-  height: 100vh !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  position: relative !important;
-  display: flex !important;
-  flex-direction: column !important;
-  justify-content: center !important;
-  align-items: center !important;
-}
-
-/* Ensure the map container is perfectly centered */
-#globe-map-container {
-  position: absolute !important;
-  top: 0 !important;
-  left: 0 !important;
-  width: 100% !important;
-  height: 100% !important;
-  margin: 0 !important;
-  padding: 0 !important;
-}
+/* REMOVED: Old full-screen globe styles that conflict with new layout */
+/* These styles were forcing the globe to be full-screen, which breaks the 33%/67% layout */
