@@ -243,10 +243,10 @@ const FormFlow = ({ onFormSubmit, onLocationSelect, selectedLocation }) => {
     const spacingScale = Math.max(0.6, Math.min(1.0, averageScale));
     
     return {
-      titleFontSize: Math.round(24 * fontScale), // Reduced from 28
-      subtitleFontSize: Math.round(13 * fontScale), // Reduced from 15
+      titleFontSize: Math.round(35 * fontScale), // Reduced from 28
+      subtitleFontSize: Math.round(16 * fontScale), // Reduced from 15
       questionFontSize: Math.round(18 * fontScale), // Reduced from 20
-      inputFontSize: Math.round(15 * fontScale), // Reduced from 16
+      inputFontSize: Math.round(14 * fontScale), // Reduced from 16
       buttonFontSize: Math.round(15 * fontScale), // Reduced from 16
       cityNameFontSize: Math.round(12 * fontScale), // Reduced from 14
       visitorNameFontSize: Math.round(11 * fontScale), // Reduced from 13
@@ -454,9 +454,9 @@ const FormFlow = ({ onFormSubmit, onLocationSelect, selectedLocation }) => {
       <div style={getScrollableContentStyle(responsiveStyles, showKeyboard)}>
         {/* Form Section */}
         <div style={getFormSectionStyle(responsiveStyles)}>
-          <h1 style={getTitleStyle(responsiveStyles)}>Welcome to Terra</h1>
+          <h1 style={getTitleStyle(responsiveStyles)}>Welcome to Peg-Plug</h1>
           <p style={getSubtitleStyle(responsiveStyles)}>
-            Highlight your hometown
+            Put Your City on the Map
           </p>
 
           {/* Progress Dots */}
@@ -664,14 +664,14 @@ const getTitleStyle = (styles) => ({
   fontWeight: '300',
   color: 'white',
   marginBottom: '4px',
-  letterSpacing: '-0.02em'
+  letterSpacing: '0.02em'
 });
 
 const getSubtitleStyle = (styles) => ({
   fontSize: `${styles.subtitleFontSize}px`,
   color: 'rgba(255, 255, 255, 0.6)',
   marginBottom: `${styles.sectionMargin * 0.8}px`,
-  fontWeight: '400'
+  fontWeight: '200'
 });
 
 const getProgressDotsStyle = (styles) => ({
