@@ -26,6 +26,7 @@ const KioskGlobe = React.memo(({
   const zoomTimeoutRef = useRef(null);
   const initialized = useRef(false);
   const isZoomedInRef = useRef(false); // CHANGED FROM STATE TO REF
+  
 
   // Get token from environment
   const mapboxToken = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN;

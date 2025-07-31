@@ -14,6 +14,7 @@ const FormFlow = ({ onFormSubmit, onLocationSelect, selectedLocation, resetTrigg
   const [isShiftPressed, setIsShiftPressed] = useState(false);
   const [inactivityTimer, setInactivityTimer] = useState(null);
   const [showValidationError, setShowValidationError] = useState(false); // NEW: Control when to show validation errors
+  const [shouldAutoAdvance, setShouldAutoAdvance] = useState(false); // NEW: Fix for circular dependency
   
   const containerRef = useRef(null);
   const inputRef = useRef(null);
@@ -130,12 +131,31 @@ const FormFlow = ({ onFormSubmit, onLocationSelect, selectedLocation, resetTrigg
     }
   }, [showSuggestions, locationSuggestions, selectedSuggestionIndex, handleSuggestionSelect]);
 
-  // Inactivity timer - DISABLED: Let the Globe handle all timing
+  // Inactivity timer - 40 seconds
   const resetInactivityTimer = useCallback(() => {
-    // DISABLED: Globe will handle the 2-minute timeout
-    // This prevents FormFlow from resetting while user is actively using the form
-    console.log('🔄 FormFlow timer reset (no-op - Globe handles timing)');
-  }, []); // SIMPLIFIED: No dependencies needed since this is now a no-op
+    if (inactivityTimer) {
+      clearTimeout(inactivityTimer);
+    }
+    
+    const timer = setTimeout(() => {
+      console.log('⏰ FormFlow 40-second inactivity timeout reached');
+      // Reset form state
+      setCurrentStep(0);
+      setFormData({});
+      setShowSuggestions(false);
+      setSelectedSuggestionIndex(-1);
+      setIsShiftPressed(false);
+      setShowValidationError(false);
+      setShowKeyboard(true);
+      setShouldAutoAdvance(false);
+      // Reset location view
+      if (selectedLocation) {
+        onLocationSelect(null);
+      }
+    }, 40000); // 40 seconds
+    
+    setInactivityTimer(timer);
+  }, [inactivityTimer, selectedLocation, onLocationSelect]);
 
   // Handle reset requests from App when Globe timeout occurs
   useEffect(() => {
@@ -149,6 +169,7 @@ const FormFlow = ({ onFormSubmit, onLocationSelect, selectedLocation, resetTrigg
       setIsShiftPressed(false);
       setShowValidationError(false);
       setShowKeyboard(true);
+      setShouldAutoAdvance(false);
     }
   }, [resetTrigger]);
 
@@ -209,8 +230,8 @@ const FormFlow = ({ onFormSubmit, onLocationSelect, selectedLocation, resetTrigg
     {
       id: 'location',
       type: 'autocomplete',
-      question: 'Pick a place',
-      placeholder: 'Type your city...',
+      question: 'Tap Keyboard Below',
+      placeholder: '',
       required: true
     },
     {
@@ -294,18 +315,19 @@ const FormFlow = ({ onFormSubmit, onLocationSelect, selectedLocation, resetTrigg
   
   const canAdvance = validateCurrentField();
 
+  // FIXED: handleInputChange without circular dependency
   const handleInputChange = useCallback((value) => {
     setFormData(prev => ({ ...prev, [currentQuestion.id]: value }));
     setShowValidationError(false); // Reset validation error when user types
     
     // AUTO-ADVANCE: For dropdown selections (gender, age), automatically advance
     if (currentQuestion.type === 'select' && value) {
-      console.log('🚀 Auto-advancing after dropdown selection:', currentQuestion.id, '=', value);
+      console.log('🚀 Triggering auto-advance for dropdown selection:', currentQuestion.id, '=', value);
       setTimeout(() => {
-        handleNext();
+        setShouldAutoAdvance(true);
       }, 500); // Small delay for better UX
     }
-  }, [currentQuestion, handleNext]);
+  }, [currentQuestion]);
 
   const handleInputFocus = useCallback(() => {
     // No-op for touch screens - no focus highlighting needed
@@ -342,7 +364,15 @@ const FormFlow = ({ onFormSubmit, onLocationSelect, selectedLocation, resetTrigg
       setCurrentStep(prev => prev + 1);
       setShowValidationError(false); // Reset validation error on successful advance
     }
-  }, [currentStep, isLastStep, formData, onFormSubmit, onLocationSelect, resetInactivityTimer, questions.length, canAdvance]);
+  }, [currentStep, isLastStep, formData, onFormSubmit, onLocationSelect, resetInactivityTimer, questions.length, canAdvance, selectedLocation]);
+
+  // NEW: Auto-advance effect to handle dropdown selections
+  useEffect(() => {
+    if (shouldAutoAdvance) {
+      setShouldAutoAdvance(false);
+      handleNext();
+    }
+  }, [shouldAutoAdvance, handleNext]);
 
   const handleCityClick = useCallback((city) => {
     const location = {
@@ -370,17 +400,17 @@ const FormFlow = ({ onFormSubmit, onLocationSelect, selectedLocation, resetTrigg
     const spacingScale = Math.max(0.6, Math.min(1.0, averageScale));
     
     return {
-      titleFontSize: Math.round(28 * fontScale),
-      subtitleFontSize: Math.round(16 * fontScale),
-      questionFontSize: Math.round(18 * fontScale),
-      inputFontSize: Math.round(14 * fontScale),
+      titleFontSize: Math.round(36 * fontScale),
+      subtitleFontSize: Math.round(18 * fontScale),
+      questionFontSize: Math.round(16 * fontScale),
+      inputFontSize: Math.round(12 * fontScale),
       buttonFontSize: Math.round(15 * fontScale),
       selectFontSize: Math.round(16 * fontScale), // INCREASED: Larger font for age dropdown
       cityNameFontSize: Math.round(12 * fontScale),
       visitorNameFontSize: Math.round(11 * fontScale),
       
       containerPadding: Math.round(32 * spacingScale),
-      sectionMargin: Math.round(32 * spacingScale),
+      sectionMargin: Math.round(24 * spacingScale),
       inputPadding: Math.round(14 * spacingScale),
       buttonPadding: Math.round(14 * spacingScale),
       
@@ -590,9 +620,11 @@ const FormFlow = ({ onFormSubmit, onLocationSelect, selectedLocation, resetTrigg
             autoFocus
             style={getSelectStyle(responsiveStyles)}
           >
-            <option value="">{currentQuestion.id === 'age' ? 'Select your age' : 'Choose one...'}</option>
+            <option value="" disabled style={getSelectPlaceholderStyle()}>
+              {currentQuestion.id === 'age' ? 'Select your age' : 'Select your gender'}
+            </option>
             {currentQuestion.options.map((option, index) => (
-              <option key={index} value={option}>
+              <option key={index} value={option} style={getSelectOptionStyle()}>
                 {option}
               </option>
             ))}
@@ -615,7 +647,11 @@ const FormFlow = ({ onFormSubmit, onLocationSelect, selectedLocation, resetTrigg
           {/* Form Section */}
           <div style={getFormSectionStyle(responsiveStyles)}>
             <div style={getHeaderStyle(responsiveStyles)}>
-              <h1 style={getTitleStyle(responsiveStyles)}>Welcome to Peg-Plug</h1>
+              <img 
+                src="/src/assets/logo.png" 
+                alt="Peg-Plug Logo" 
+                style={getLogoStyle(responsiveStyles)}
+              />
               <p style={getSubtitleStyle(responsiveStyles)}>
                 Put Your City on the Map
               </p>
@@ -761,6 +797,17 @@ const FormFlow = ({ onFormSubmit, onLocationSelect, selectedLocation, resetTrigg
           background-color: #1a1a1a !important;
           color: white !important;
           border: none !important;
+          padding: 8px 12px !important;
+          font-size: inherit !important;
+        }
+        
+        select option:disabled {
+          color: rgba(255, 255, 255, 0.5) !important;
+          font-style: italic !important;
+        }
+        
+        select option:checked {
+          background-color: #1976d2 !important;
         }
         
         select::-webkit-scrollbar {
@@ -844,6 +891,16 @@ const getTitleStyle = (styles) => ({
   textAlign: 'center'
 });
 
+// NEW: Logo styling
+const getLogoStyle = (styles) => ({
+  maxWidth: '100%',
+  height: 'auto',
+  maxHeight: `${Math.round(styles.titleFontSize * 2.5)}px`, // Scale with responsive font size
+  marginBottom: '16px',
+  display: 'block',
+  margin: '0 auto 16px auto' // Center the logo
+});
+
 const getSubtitleStyle = (styles) => ({
   fontSize: `${styles.subtitleFontSize}px`,
   color: 'rgba(255, 255, 255, 0.6)',
@@ -869,12 +926,12 @@ const getProgressDotStyle = (styles) => ({
 });
 
 const getActiveDotStyle = () => ({
-  background: '#1976d2',
+  background: '#dc2626', // Changed from blue to red
   transform: 'scale(1.2)'
 });
 
 const getCompletedDotStyle = () => ({
-  background: '#81d4fa'
+  background: '#f87171' // Changed from light blue to light red
 });
 
 const getFormGroupStyle = (styles) => ({
@@ -899,17 +956,16 @@ const getInputStyle = (styles) => ({
   width: '100%',
   padding: `${styles.inputPadding}px ${styles.inputPadding + 2}px`,
   background: 'rgba(255, 255, 255, 0.04)',
-  border: '1px solid rgba(255, 255, 255, 0.12)',
+  border: 'none', // REMOVED: white border
   borderRadius: `${Math.round(10 * (styles.inputPadding / 12))}px`,
   color: 'white',
   fontSize: `${styles.inputFontSize}px`,
   fontFamily: "'Inter', sans-serif",
-  // REMOVED: transition animation
   outline: 'none',
   textAlign: 'center' // Center input text
 });
 
-// Simple location input style - no hover/focus effects for touch screens
+// Simple location input style - no borders for touch screens
 const getLocationInputStyle = (styles) => ({
   width: '120%',
   maxWidth: '450px',
@@ -919,7 +975,7 @@ const getLocationInputStyle = (styles) => ({
   paddingLeft: `${styles.inputPadding + 2}px`,
   paddingRight: `${styles.inputPadding + 2}px`,
   background: 'rgba(255, 255, 255, 0.04)',
-  border: '1px solid rgba(255, 255, 255, 0.12)',
+  border: 'none', // REMOVED: white border
   borderRadius: `${Math.round(10 * (styles.inputPadding / 12))}px`,
   color: 'white',
   fontSize: `${styles.inputFontSize}px`,
@@ -935,7 +991,7 @@ const getNextButtonStyle = (styles) => ({
   paddingBottom: `${styles.buttonPadding}px`,
   paddingLeft: `${styles.buttonPadding + 4}px`,
   paddingRight: `${styles.buttonPadding + 4}px`,
-  background: 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)',
+  background: 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)', // Changed from blue to red gradient
   border: 'none',
   borderRadius: `${Math.round(10 * (styles.buttonPadding / 12))}px`,
   color: 'white',
@@ -1000,7 +1056,7 @@ const getCityCardStyle = (styles) => ({
 const getCityRankStyle = (styles) => ({
   fontSize: `${Math.round(11 * (styles.cityNameFontSize / 12))}px`,
   fontWeight: '600',
-  color: '#81d4fa',
+  color: '#f87171', // Changed from blue to light red
   minWidth: `${Math.round(20 * (styles.inputPadding / 12))}px`,
   marginRight: `${Math.round(12 * (styles.inputPadding / 12))}px`,
   textAlign: 'center'
@@ -1026,7 +1082,7 @@ const getCityNameStyle = (styles) => ({
 
 const getCityCountStyle = (styles) => ({
   fontSize: `${Math.round(10 * (styles.cityNameFontSize / 12))}px`,
-  color: '#81d4fa',
+  color: '#f87171', // Changed from blue to light red
   fontWeight: '500'
 });
 
@@ -1065,7 +1121,7 @@ const getVisitorLocationStyle = (styles) => ({
 
 const getVisitorTimeStyle = (styles) => ({
   fontSize: `${Math.round(9 * (styles.visitorNameFontSize / 11))}px`,
-  color: 'rgba(129, 212, 250, 0.8)',
+  color: 'rgba(248, 113, 113, 0.8)', // Changed from blue to red with opacity
   fontWeight: '500',
   marginRight: '10px'
 });
@@ -1121,8 +1177,8 @@ const getKeyboardKeyStyle = (styles, key) => {
 };
 
 const getKeyboardKeyActiveStyle = () => ({
-  backgroundColor: 'rgba(25, 118, 210, 0.3)',
-  borderColor: 'rgba(25, 118, 210, 0.5)'
+  backgroundColor: 'rgba(220, 38, 38, 0.3)', // Changed from blue to red
+  borderColor: 'rgba(220, 38, 38, 0.5)' // Changed from blue to red
 });
 
 const getSuggestionsStyle = (styles, showKeyboard, keyboardHeight) => ({
@@ -1131,7 +1187,7 @@ const getSuggestionsStyle = (styles, showKeyboard, keyboardHeight) => ({
   left: 0,
   right: 0,
   background: 'rgba(20, 20, 20, 0.95)',
-  border: '1px solid rgba(255, 255, 255, 0.12)',
+  border: 'none', // REMOVED: white border
   borderRadius: `${Math.round(8 * (styles.inputPadding / 12))}px`,
   marginTop: '4px',
   height: 'auto',
@@ -1141,21 +1197,23 @@ const getSuggestionsStyle = (styles, showKeyboard, keyboardHeight) => ({
   backdropFilter: 'blur(10px)'
 });
 
-// UPDATED: Select style with individual padding properties
+// UPDATED: Select style with better styling and no borders
 const getSelectStyle = (styles) => ({
   ...getInputStyle(styles),
-  fontSize: `${styles.selectFontSize}px`, // LARGER font size for age dropdown
+  fontSize: `${styles.selectFontSize}px`, // LARGER font size for dropdowns
   cursor: 'pointer',
-  background: 'rgba(255, 255, 255, 0.04)',
-  border: '1px solid rgba(255, 255, 255, 0.12)',
+  background: 'rgba(255, 255, 255, 0.08)', // Slightly more visible background
+  border: 'none', // REMOVED: white border
   color: 'white',
   appearance: 'none',
   backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e")`,
   backgroundRepeat: 'no-repeat',
   backgroundPosition: `right ${styles.inputPadding}px center`,
   backgroundSize: '16px',
-  // FIXED: Override right padding for arrow space
-  paddingRight: `${styles.inputPadding + 24}px`
+  paddingRight: `${styles.inputPadding + 24}px`,
+  minHeight: `${Math.round(48 * (styles.inputPadding / 12))}px`, // Better height for touch
+  display: 'flex',
+  alignItems: 'center'
 });
 
 // Darker overlay style for stats section - REMOVED ANIMATION
@@ -1176,9 +1234,9 @@ const getSuggestionItemStyle = (styles) => ({
 });
 
 const getSelectedSuggestionStyle = () => ({
-  background: 'rgba(25, 118, 210, 0.2)',
-  borderColor: 'rgba(25, 118, 210, 0.3)',
-  backgroundColor: 'rgba(25, 118, 210, 0.15)' // Darker blue selection
+  background: 'rgba(220, 38, 38, 0.2)', // Changed from blue to red
+  borderColor: 'rgba(220, 38, 38, 0.3)', // Changed from blue to red
+  backgroundColor: 'rgba(220, 38, 38, 0.15)' // Changed from blue to red
 });
 
 // Pin Added confirmation styles
@@ -1200,7 +1258,7 @@ const getPinAddedIconStyle = (styles) => ({
 const getPinAddedTitleStyle = (styles) => ({
   fontSize: `${Math.round(styles.titleFontSize * 1.2)}px`,
   fontWeight: '500',
-  color: '#81d4fa',
+  color: '#f87171', // Changed from blue to light red
   marginBottom: `${styles.inputPadding / 2}px`,
   letterSpacing: '0.02em'
 });
@@ -1217,6 +1275,18 @@ const getValidationErrorStyle = (styles) => ({
   marginTop: `${Math.round(styles.inputPadding * 0.5)}px`,
   textAlign: 'center',
   fontWeight: '400'
+});
+
+// NEW: Placeholder styling for disabled select options
+const getSelectPlaceholderStyle = () => ({
+  color: 'rgba(255, 255, 255, 0.5)',
+  fontStyle: 'italic'
+});
+
+// NEW: Regular option styling
+const getSelectOptionStyle = () => ({
+  color: 'white',
+  backgroundColor: '#1a1a1a'
 });
 
 export default FormFlow;
