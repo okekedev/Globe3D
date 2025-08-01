@@ -1,4 +1,4 @@
-/* Add this to your App.css - CORRECTED responsive globe scaling */
+/* App.css - Updated with 42x58 ratio */
 
 /* IMPORTANT: Ensure base layout remains side-by-side */
 .app-container {
@@ -9,9 +9,9 @@
   flex-direction: row !important; /* Force horizontal layout */
 }
 
-/* Left Panel - Form Flow (33%) - PRESERVE ORIGINAL */
+/* Left Panel - Form Flow (42%) - UPDATED RATIO */
 .left-panel {
-  flex: 0 0 33% !important;
+  flex: 0 0 42% !important;
   background: linear-gradient(180deg, #0a0a0a 0%, #1a1a1a 100%) !important;
   border-right: 1px solid rgba(255, 255, 255, 0.08) !important;
   display: flex !important;
@@ -20,9 +20,9 @@
   min-width: 300px !important; /* Prevent it from getting too small */
 }
 
-/* Right Panel - Globe Display (67%) - PRESERVE ORIGINAL */
+/* Right Panel - Globe Display (58%) - UPDATED RATIO */
 .right-panel {
-  flex: 0 0 67% !important;
+  flex: 0 0 58% !important;
   background: #000 !important;
   position: relative !important;
   overflow: hidden !important;
@@ -50,11 +50,11 @@
 /* ONLY allow responsive changes on very large screens */
 @media (min-width: 1400px) {
   .left-panel {
-    flex: 0 0 30% !important; /* Slightly smaller form on huge screens */
+    flex: 0 0 38% !important; /* Slightly smaller form on huge screens */
   }
   
   .right-panel {
-    flex: 0 0 70% !important; /* More space for globe */
+    flex: 0 0 62% !important; /* More space for globe */
   }
 }
 

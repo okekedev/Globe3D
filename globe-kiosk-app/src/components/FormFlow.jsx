@@ -1,8 +1,8 @@
-// FormFlow.jsx - Updated to use dynamic metrics from pin data
+// FormFlow.jsx - Enhanced with Stock Ticker Style Stats and Inline Keyboard
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import ReactCountryFlag from 'react-country-flag';
 
-const FormFlow = ({ onFormSubmit, onLocationSelect, selectedLocation, resetTrigger, metricsData }) => {
+const FormFlow = ({ onFormSubmit, onLocationSelect, selectedLocation, resetTrigger }) => {
   const [currentStep, setCurrentStep] = useState(0);
   const [formData, setFormData] = useState({});
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
@@ -10,11 +10,9 @@ const FormFlow = ({ onFormSubmit, onLocationSelect, selectedLocation, resetTrigg
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
-  const [showKeyboard, setShowKeyboard] = useState(true); // Always show keyboard
+  const [showKeyboard, setShowKeyboard] = useState(false);
   const [isShiftPressed, setIsShiftPressed] = useState(false);
-  const [inactivityTimer, setInactivityTimer] = useState(null);
   const [showValidationError, setShowValidationError] = useState(false);
-  const [shouldAutoAdvance, setShouldAutoAdvance] = useState(false); // Fix for circular dependency
   
   const containerRef = useRef(null);
   const inputRef = useRef(null);
@@ -35,7 +33,7 @@ const FormFlow = ({ onFormSubmit, onLocationSelect, selectedLocation, resetTrigg
     
     try {
       const response = await fetch(
-        `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${mapboxToken}&types=place,locality,neighborhood&limit=5&autocomplete=true`
+        `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${mapboxToken}&types=place,locality,neighborhood&limit=3&autocomplete=true`
       );
       
       if (response.ok) {
@@ -49,7 +47,7 @@ const FormFlow = ({ onFormSubmit, onLocationSelect, selectedLocation, resetTrigg
           bbox: feature.bbox
         }));
         
-        setLocationSuggestions(suggestions);
+        setLocationSuggestions(suggestions.slice(0, 3)); // Only show 3 suggestions
         setShowSuggestions(suggestions.length > 0);
         setSelectedSuggestionIndex(-1);
       }
@@ -76,17 +74,17 @@ const FormFlow = ({ onFormSubmit, onLocationSelect, selectedLocation, resetTrigg
   // Handle location input change
   const handleLocationInputChange = useCallback((value) => {
     setFormData(prev => ({ ...prev, location: value }));
-    setShowValidationError(false); // Reset validation error when user types
+    setShowValidationError(false);
     debouncedSearch(value);
   }, [debouncedSearch]);
 
-  // Handle suggestion selection - immediate navigation, slow background zoom
+  // Handle suggestion selection
   const handleSuggestionSelect = useCallback((suggestion) => {
     setFormData(prev => ({ ...prev, location: suggestion.name }));
     setShowSuggestions(false);
     setSelectedSuggestionIndex(-1);
+    setShowKeyboard(false);
     
-    // Send location data to parent for slow 30-second zoom animation
     const locationData = {
       name: suggestion.name,
       shortName: suggestion.shortName,
@@ -96,140 +94,61 @@ const FormFlow = ({ onFormSubmit, onLocationSelect, selectedLocation, resetTrigg
     };
     onLocationSelect(locationData);
     
-    // Immediately advance to next step - user continues form while zoom happens
     setCurrentStep(prev => prev + 1);
   }, [onLocationSelect]);
-
-  // Handle keyboard navigation in suggestions
-  const handleKeyDown = useCallback((e) => {
-    if (!showSuggestions || locationSuggestions.length === 0) return;
-
-    switch (e.key) {
-      case 'ArrowDown':
-        e.preventDefault();
-        setSelectedSuggestionIndex(prev => 
-          prev < locationSuggestions.length - 1 ? prev + 1 : 0
-        );
-        break;
-      case 'ArrowUp':
-        e.preventDefault();
-        setSelectedSuggestionIndex(prev => 
-          prev > 0 ? prev - 1 : locationSuggestions.length - 1
-        );
-        break;
-      case 'Enter':
-        e.preventDefault();
-        if (selectedSuggestionIndex >= 0) {
-          handleSuggestionSelect(locationSuggestions[selectedSuggestionIndex]);
-        }
-        break;
-      case 'Escape':
-        setShowSuggestions(false);
-        setSelectedSuggestionIndex(-1);
-        setShowKeyboard(false);
-        break;
-    }
-  }, [showSuggestions, locationSuggestions, selectedSuggestionIndex, handleSuggestionSelect]);
-
-  // Inactivity timer - 40 seconds
-  const resetInactivityTimer = useCallback(() => {
-    if (inactivityTimer) {
-      clearTimeout(inactivityTimer);
-    }
-    
-    const timer = setTimeout(() => {
-      console.log('⏰ FormFlow 40-second inactivity timeout reached');
-      // Reset form state
-      setCurrentStep(0);
-      setFormData({});
-      setShowSuggestions(false);
-      setSelectedSuggestionIndex(-1);
-      setIsShiftPressed(false);
-      setShowValidationError(false);
-      setShowKeyboard(true);
-      setShouldAutoAdvance(false);
-      // Reset location view
-      if (selectedLocation) {
-        onLocationSelect(null);
-      }
-    }, 40000); // 40 seconds
-    
-    setInactivityTimer(timer);
-  }, [inactivityTimer, selectedLocation, onLocationSelect]);
 
   // Handle reset requests from App when Globe timeout occurs
   useEffect(() => {
     if (resetTrigger > 0) {
-      console.log('🔄 FormFlow received reset trigger from App');
-      // Reset all form state
       setCurrentStep(0);
       setFormData({});
       setShowSuggestions(false);
       setSelectedSuggestionIndex(-1);
-      setIsShiftPressed(false);
+      setShowKeyboard(false);
       setShowValidationError(false);
-      setShowKeyboard(true);
-      setShouldAutoAdvance(false);
     }
   }, [resetTrigger]);
 
-  // Cleanup timer on unmount
+  // Detect container size for responsive styling
   useEffect(() => {
-    return () => {
-      if (inactivityTimer) {
-        clearTimeout(inactivityTimer);
+    const updateSize = () => {
+      if (containerRef.current) {
+        const rect = containerRef.current.getBoundingClientRect();
+        setContainerSize({ width: rect.width, height: rect.height });
       }
     };
-  }, [inactivityTimer]);
 
-  // Add event listeners for user interaction
-  useEffect(() => {
-    const handleUserInteraction = () => {
-      resetInactivityTimer();
-    };
-
-    document.addEventListener('click', handleUserInteraction);
-    document.addEventListener('keypress', handleUserInteraction);
-    document.addEventListener('touchstart', handleUserInteraction);
-
-    return () => {
-      document.removeEventListener('click', handleUserInteraction);
-      document.removeEventListener('keypress', handleUserInteraction);
-      document.removeEventListener('touchstart', handleUserInteraction);
-    };
-  }, [resetInactivityTimer]);
-  
-  // Track container size for responsiveness
-  useEffect(() => {
-    if (!containerRef.current) return;
-
-    const resizeObserver = new ResizeObserver((entries) => {
-      for (let entry of entries) {
-        setContainerSize({
-          width: entry.contentRect.width,
-          height: entry.contentRect.height
-        });
-      }
-    });
-
-    resizeObserver.observe(containerRef.current);
-
-    return () => resizeObserver.disconnect();
+    updateSize();
+    window.addEventListener('resize', updateSize);
+    return () => window.removeEventListener('resize', updateSize);
   }, []);
 
-  // Generate age options 1-99
-  const ageOptions = Array.from({ length: 99 }, (_, i) => i + 1);
+  // Age options for dropdown
+  const ageOptions = [
+    { value: '', label: 'Select Age Range' },
+    { value: '18-24', label: '18-24' },
+    { value: '25-34', label: '25-34' },
+    { value: '35-44', label: '35-44' },
+    { value: '45-54', label: '45-54' },
+    { value: '55-64', label: '55-64' },
+    { value: '65+', label: '65+' }
+  ];
 
-  // Gender options
-  const genderOptions = ['Male', 'Female', 'Non-binary', 'Other', 'Prefer not to say'];
+  // Gender options for dropdown
+  const genderOptions = [
+    { value: '', label: 'Select Gender' },
+    { value: 'male', label: 'Male' },
+    { value: 'female', label: 'Female' },
+    { value: 'non-binary', label: 'Non-binary' },
+    { value: 'prefer-not-to-say', label: 'Prefer not to say' }
+  ];
 
-  // Simplified form questions with gender after name
   const questions = [
     {
       id: 'location',
-      type: 'autocomplete',
-      question: 'Pick a place',
-      placeholder: 'Type your city...',
+      type: 'location',
+      question: 'Where are you from?',
+      placeholder: 'Enter your city or country',
       required: true
     },
     {
@@ -262,128 +181,79 @@ const FormFlow = ({ onFormSubmit, onLocationSelect, selectedLocation, resetTrigg
     }
   ];
 
-  // NEW: Use dynamic metrics data from KioskGlobe, with fallback to static data
-  const topCities = metricsData?.topCities || [
+  // Extended top cities for ticker effect
+  const topCities = [
     { rank: 1, city: "Dallas", country: "US", countryCode: "US", visitors: "2.4K" },
     { rank: 2, city: "Tokyo", country: "JP", countryCode: "JP", visitors: "1.8K" },
-    { rank: 3, city: "London", country: "UK", countryCode: "GB", visitors: "1.6K" }
-  ];
-
-  // NEW: Use dynamic recent visitors data  
-  const recentVisitors = metricsData?.recentVisitors || [
-    { name: "Sarah M.", city: "Paris", countryCode: "FR", time: "2m" },
-    { name: "Alex K.", city: "Berlin", countryCode: "DE", time: "5m" },
-    { name: "Maria L.", city: "São Paulo", countryCode: "BR", time: "8m" }
+    { rank: 3, city: "London", country: "UK", countryCode: "GB", visitors: "1.6K" },
+    { rank: 4, city: "Paris", country: "FR", countryCode: "FR", visitors: "1.4K" },
+    { rank: 5, city: "Sydney", country: "AU", countryCode: "AU", visitors: "1.2K" }
   ];
 
   const currentQuestion = questions[currentStep];
   const isLastStep = currentStep === questions.length - 1;
-  const isPinAddedStep = currentStep === questions.length; // Step after last question
+  const isPinAddedStep = currentStep === questions.length;
   
   // Validation logic
   const validateCurrentField = useCallback(() => {
     const value = formData[currentQuestion?.id];
     if (!value || !String(value).trim()) {
-      return currentQuestion?.required ? false : true; // Optional fields can be empty
+      return currentQuestion?.required ? false : true;
     }
     
-    // Special validation for contact field (email/phone)
     if (currentQuestion?.id === 'contact') {
       const trimmedValue = String(value).trim();
-      if (trimmedValue === '') return true; // Optional field can be empty
+      if (trimmedValue === '') return true;
       
-      // Check if it's an email (contains @)
       if (trimmedValue.includes('@')) {
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         return emailRegex.test(trimmedValue);
       }
       
-      // Check if it's a phone number (10 digits)
       const phoneRegex = /^\d{10}$/;
       return phoneRegex.test(trimmedValue.replace(/\D/g, ''));
     }
     
-    // Age validation - now just check if value exists since it's a dropdown
     if (currentQuestion?.id === 'age') {
-      return !!value; // Just need a selection
+      return !['', 'Select Age Range'].includes(value);
+    }
+    
+    if (currentQuestion?.id === 'gender') {
+      return !['', 'Select Gender'].includes(value);
     }
     
     return true;
-  }, [formData, currentQuestion]);
-  
+  }, [currentQuestion, formData]);
+
   const canAdvance = validateCurrentField();
 
-  // FIXED: handleInputChange without circular dependency
-  const handleInputChange = useCallback((value) => {
-    setFormData(prev => ({ ...prev, [currentQuestion.id]: value }));
-    setShowValidationError(false); // Reset validation error when user types
-    
-    // AUTO-ADVANCE: For dropdown selections (gender, age), automatically advance
-    if (currentQuestion.type === 'select' && value) {
-      console.log('🚀 Triggering auto-advance for dropdown selection:', currentQuestion.id, '=', value);
-      setTimeout(() => {
-        setShouldAutoAdvance(true);
-      }, 500); // Small delay for better UX
-    }
-  }, [currentQuestion]);
-
-  const handleInputFocus = useCallback(() => {
-    // No-op for touch screens - no focus highlighting needed
-  }, []);
-
   const handleNext = useCallback(() => {
-    resetInactivityTimer();
-    
-    // Check validation before proceeding
     if (!canAdvance) {
-      setShowValidationError(true); // Show error only when user tries to submit
+      setShowValidationError(true);
       return;
     }
-    
+
     if (isLastStep) {
-      const completeData = { ...formData, timestamp: new Date().toISOString() };
-      onFormSubmit(completeData);
+      onFormSubmit(formData);
+      setCurrentStep(prev => prev + 1);
       
-      // Show "Pin Added" step
-      setCurrentStep(questions.length); // Go beyond last question to show confirmation
-      
-      // Reset after showing pin added message
       setTimeout(() => {
         setCurrentStep(0);
         setFormData({});
-        setShowKeyboard(true); // Ensure keyboard reappears
+        setShowKeyboard(false);
         setShowValidationError(false);
-        // Only reset location if there was one selected
         if (selectedLocation) {
-          onLocationSelect(null); // Reset view
+          onLocationSelect(null);
         }
-      }, 3000); // 3 seconds to show "Pin Added"
+      }, 3000);
     } else {
       setCurrentStep(prev => prev + 1);
-      setShowValidationError(false); // Reset validation error on successful advance
+      setShowValidationError(false);
+      setShowKeyboard(false);
     }
-  }, [currentStep, isLastStep, formData, onFormSubmit, onLocationSelect, resetInactivityTimer, questions.length, canAdvance, selectedLocation]);
+  }, [currentStep, isLastStep, formData, onFormSubmit, onLocationSelect, canAdvance, selectedLocation]);
 
-  // NEW: Auto-advance effect to handle dropdown selections
-  useEffect(() => {
-    if (shouldAutoAdvance) {
-      setShouldAutoAdvance(false);
-      handleNext();
-    }
-  }, [shouldAutoAdvance, handleNext]);
-
-  const handleCityClick = useCallback((city) => {
-    const location = {
-      name: `${city.city}, ${city.country}`,
-      lat: 0,
-      lng: 0,
-      visitors: city.visitors,
-      flag: city.flag
-    };
-    onLocationSelect(location);
-  }, [onLocationSelect]);
-
-  // Calculate responsive styles - UPDATED FOR BETTER CENTRALIZATION
+  // Calculate responsive styles
   const getResponsiveStyles = useCallback(() => {
     const { width, height } = containerSize;
     
@@ -392,122 +262,138 @@ const FormFlow = ({ onFormSubmit, onLocationSelect, selectedLocation, resetTrigg
     
     const widthScale = width / baseWidth;
     const heightScale = height / baseHeight;
-    const averageScale = Math.min(widthScale, heightScale, 1.4);
+    const averageScale = Math.min(widthScale, heightScale, 1.8); // Increased max scale from 1.4 to 1.8
     
-    const fontScale = Math.max(0.7, Math.min(1.1, averageScale));
-    const spacingScale = Math.max(0.6, Math.min(1.0, averageScale));
+    const fontScale = Math.max(1.0, Math.min(1.6, averageScale)); // Increased from 0.7-1.1 to 1.0-1.6
+    const spacingScale = Math.max(0.8, Math.min(1.4, averageScale)); // Increased from 0.6-1.0 to 0.8-1.4
     
     return {
-      titleFontSize: Math.round(28 * fontScale),
-      subtitleFontSize: Math.round(16 * fontScale),
-      questionFontSize: Math.round(18 * fontScale),
-      inputFontSize: Math.round(14 * fontScale),
-      buttonFontSize: Math.round(15 * fontScale),
-      selectFontSize: Math.round(16 * fontScale), // INCREASED: Larger font for age dropdown
-      cityNameFontSize: Math.round(12 * fontScale),
-      visitorNameFontSize: Math.round(11 * fontScale),
+      titleFontSize: Math.round(36 * fontScale), // Increased from 28
+      subtitleFontSize: Math.round(20 * fontScale), // Increased from 16
+      questionFontSize: Math.round(24 * fontScale), // Increased from 18
+      inputFontSize: Math.round(18 * fontScale), // Increased from 14
+      buttonFontSize: Math.round(20 * fontScale), // Increased from 15
+      selectFontSize: Math.round(20 * fontScale), // Increased from 16
+      cityNameFontSize: Math.round(15 * fontScale), // Increased from 11
+      visitorNameFontSize: Math.round(14 * fontScale), // Increased from 10
       
-      containerPadding: Math.round(32 * spacingScale),
-      sectionMargin: Math.round(32 * spacingScale),
-      inputPadding: Math.round(14 * spacingScale),
-      buttonPadding: Math.round(14 * spacingScale),
+      containerPadding: Math.round(32 * spacingScale), // Increased from 24
+      sectionMargin: Math.round(40 * spacingScale), // Increased from 24
+      inputPadding: Math.round(18 * spacingScale), // Increased from 12
+      buttonPadding: Math.round(18 * spacingScale), // Increased from 12
       
-      dotSize: Math.round(8 * fontScale),
-      keyboardHeight: Math.round(240 * spacingScale),
+      dotSize: Math.round(12 * fontScale), // Increased from 8
+      keyboardHeight: Math.round(220 * spacingScale), // Increased from 180
       
-      // Centralization settings
-      maxContentWidth: Math.min(width - 24, 420), // Even wider content, minimal outer margin
+      maxContentWidth: Math.min(width - 16, 500), // Increased from 420
       isCompact: height < 700 || width < 350,
     };
   }, [containerSize]);
 
   const responsiveStyles = getResponsiveStyles();
 
-  // Handle virtual keyboard input - auto-type in location field
+  // Handle virtual keyboard input
   const handleKeyPress = useCallback((key) => {
-    resetInactivityTimer();
+    const currentValue = formData[currentQuestion?.id] || '';
     
-    // If not on location step, auto-switch to location and type there
-    if (currentQuestion?.id !== 'location') {
-      if (key !== 'backspace' && key !== 'space' && key !== 'shift' && key !== 'enter') {
-        setCurrentStep(0); // Go to location step
-        setTimeout(() => {
-          const char = isShiftPressed ? key.toUpperCase() : key.toLowerCase();
-          setFormData(prev => ({ ...prev, location: char }));
-          handleLocationInputChange(char);
-        }, 100);
-        return;
+    if (key === 'backspace') {
+      const newValue = currentValue.slice(0, -1);
+      if (currentQuestion?.id === 'location') {
+        handleLocationInputChange(newValue);
+      } else {
+        setFormData(prev => ({ ...prev, [currentQuestion.id]: newValue }));
+      }
+    } else if (key === 'space') {
+      const newValue = currentValue + ' ';
+      if (currentQuestion?.id === 'location') {
+        handleLocationInputChange(newValue);
+      } else {
+        setFormData(prev => ({ ...prev, [currentQuestion.id]: newValue }));
+      }
+    } else if (key === 'enter') {
+      if (showSuggestions && selectedSuggestionIndex >= 0) {
+        handleSuggestionSelect(locationSuggestions[selectedSuggestionIndex]);
+      } else if (canAdvance) {
+        handleNext();
+      }
+    } else if (key !== 'shift') {
+      const char = isShiftPressed ? key.toUpperCase() : key.toLowerCase();
+      const newValue = currentValue + char;
+      if (currentQuestion?.id === 'location') {
+        handleLocationInputChange(newValue);
+      } else {
+        setFormData(prev => ({ ...prev, [currentQuestion.id]: newValue }));
       }
     }
     
-    const targetField = currentQuestion?.id === 'location' ? 'location' : currentQuestion?.id;
-    const currentValue = formData[targetField] || '';
-    let newValue = currentValue;
-
-    switch (key) {
-      case 'backspace':
-        newValue = currentValue.slice(0, -1);
-        break;
-      case 'space':
-        newValue = currentValue + ' ';
-        break;
-      case 'shift':
-        setIsShiftPressed(prev => !prev);
-        return;
-      case 'enter':
-        if (currentQuestion?.type === 'autocomplete' && selectedSuggestionIndex >= 0) {
-          handleSuggestionSelect(locationSuggestions[selectedSuggestionIndex]);
-        }
-        return;
-      default:
-        const char = isShiftPressed ? key.toUpperCase() : key.toLowerCase();
-        newValue = currentValue + char;
-        setIsShiftPressed(false);
-        break;
-    }
-
-    if (targetField === 'location') {
-      handleLocationInputChange(newValue);
+    if (key === 'shift') {
+      setIsShiftPressed(prev => !prev);
     } else {
-      setFormData(prev => ({ ...prev, [targetField]: newValue }));
+      setIsShiftPressed(false);
     }
-  }, [formData, currentQuestion, selectedSuggestionIndex, locationSuggestions, handleSuggestionSelect, handleLocationInputChange, isShiftPressed, resetInactivityTimer]);
+  }, [currentQuestion, formData, isShiftPressed, handleLocationInputChange, handleNext, canAdvance, showSuggestions, selectedSuggestionIndex, handleSuggestionSelect, locationSuggestions]);
 
-  // Virtual keyboard layout
-  const keyboardRows = [
-    ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'],
-    ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l'],
-    ['shift', 'z', 'x', 'c', 'v', 'b', 'n', 'm', 'backspace'],
-    ['space', 'enter']
-  ];
-
-  const getKeyLabel = (key, shift) => {
-    switch (key) {
-      case 'backspace': return '⌫';
-      case 'shift': return '⇧';
-      case 'space': return '______';
-      case 'enter': return '↵';
-      default: return shift ? key.toUpperCase() : key;
+  // Handle input field changes
+  const handleInputChange = useCallback((e) => {
+    const { value } = e.target;
+    setShowValidationError(false);
+    
+    if (currentQuestion?.id === 'location') {
+      handleLocationInputChange(value);
+    } else {
+      setFormData(prev => ({ ...prev, [currentQuestion.id]: value }));
     }
-  };
+  }, [currentQuestion, handleLocationInputChange]);
 
+  // Handle input focus - show keyboard for text inputs
+  const handleInputFocus = useCallback(() => {
+    if (currentQuestion?.type === 'text' || currentQuestion?.type === 'location') {
+      setShowKeyboard(true);
+    }
+  }, [currentQuestion]);
+
+  // Handle select field changes
+  const handleSelectChange = useCallback((e) => {
+    const { value } = e.target;
+    setFormData(prev => ({ ...prev, [currentQuestion.id]: value }));
+    setShowValidationError(false);
+    setShowKeyboard(false); // Hide keyboard for selects
+    
+    // Auto-advance after selection
+    setTimeout(() => {
+      if (value && !['', 'Select Age Range', 'Select Gender'].includes(value)) {
+        handleNext();
+      }
+    }, 500);
+  }, [currentQuestion, handleNext]);
+
+  // Virtual keyboard component
   const renderKeyboard = () => {
-    if (!showKeyboard) return null;
+    // Only show keyboard for text and location inputs
+    if (!showKeyboard || currentQuestion?.type === 'select') return null;
+    
+    const keyboardRows = [
+      ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'],
+      ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l'],
+      ['shift', 'z', 'x', 'c', 'v', 'b', 'n', 'm', 'backspace'],
+      ['space', 'enter']
+    ];
 
     return (
-      <div style={getKeyboardStyle(responsiveStyles)}>
+      <div style={getInlineKeyboardStyle(responsiveStyles)}>
         {keyboardRows.map((row, rowIndex) => (
-          <div key={rowIndex} style={getKeyboardRowStyle(responsiveStyles)}>
+          <div key={rowIndex} style={getKeyboardRowStyle()}>
             {row.map((key) => (
               <button
                 key={key}
-                style={{
-                  ...getKeyboardKeyStyle(responsiveStyles, key),
-                  ...(key === 'shift' && isShiftPressed ? getKeyboardKeyActiveStyle() : {})
-                }}
+                style={getKeyboardKeyStyle(responsiveStyles, key)}
                 onClick={() => handleKeyPress(key)}
               >
-                {getKeyLabel(key, isShiftPressed)}
+                {key === 'backspace' ? '⌫' : 
+                 key === 'shift' ? '⇧' : 
+                 key === 'space' ? '___' : 
+                 key === 'enter' ? '↵' : 
+                 isShiftPressed && key !== 'shift' ? key.toUpperCase() : key}
               </button>
             ))}
           </div>
@@ -516,272 +402,152 @@ const FormFlow = ({ onFormSubmit, onLocationSelect, selectedLocation, resetTrigg
     );
   };
 
-  const renderInput = () => {
-    switch (currentQuestion.type) {
-      case 'autocomplete':
-        return (
-          <div style={{ position: 'relative', width: '100%', display: 'flex', justifyContent: 'center' }}>
-            <input
-              ref={inputRef}
-              type="text"
-              placeholder={currentQuestion.placeholder}
-              value={formData[currentQuestion.id] || ''}
-              onChange={(e) => handleLocationInputChange(e.target.value)}
-              onKeyDown={handleKeyDown}
-              onFocus={handleInputFocus}
-              autoFocus
-              style={{
-                ...getLocationInputStyle(responsiveStyles),
-                paddingTop: `${responsiveStyles.inputPadding}px`,
-                paddingBottom: `${responsiveStyles.inputPadding}px`,
-                paddingLeft: `${responsiveStyles.inputPadding + 2}px`,
-                paddingRight: isLoadingSuggestions ? 
-                  `${responsiveStyles.inputPadding + 30}px` : `${responsiveStyles.inputPadding + 2}px`
-              }}
-            />
-            
-            {isLoadingSuggestions && (
-              <div style={{
-                position: 'absolute',
-                right: `${responsiveStyles.inputPadding}px`,
-                top: '50%',
-                transform: 'translateY(-50%)',
-                width: '16px',
-                height: '16px',
-                border: '2px solid rgba(255, 255, 255, 0.3)',
-                borderTop: '2px solid white',
-                borderRadius: '50%',
-                animation: 'spin 1s linear infinite'
-              }} />
-            )}
-            
-            {showSuggestions && locationSuggestions.length > 0 && (
-              <div style={getSuggestionsStyle(responsiveStyles, showKeyboard, responsiveStyles.keyboardHeight)}>
-                {locationSuggestions.map((suggestion, index) => (
-                  <div
-                    key={suggestion.id}
-                    style={{
-                      ...getSuggestionItemStyle(responsiveStyles),
-                      ...(index === selectedSuggestionIndex ? getSelectedSuggestionStyle() : {})
-                    }}
-                    onClick={() => handleSuggestionSelect(suggestion)}
-                  >
-                    <div style={{ fontWeight: '500', marginBottom: '2px' }}>
-                      {suggestion.shortName}
-                    </div>
-                    <div style={{ 
-                      fontSize: `${responsiveStyles.inputFontSize - 2}px`, 
-                      opacity: 0.7,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap'
-                    }}>
+  const renderCurrentStep = () => {
+    if (isPinAddedStep) {
+      return (
+        <div style={getPinAddedStyle(responsiveStyles)}>
+          <div style={getPinAddedIconStyle(responsiveStyles)}>📍</div>
+          <div style={getPinAddedTitleStyle(responsiveStyles)}>Pin Added!</div>
+          <div style={getPinAddedSubtitleStyle(responsiveStyles)}>Thank you for joining our community</div>
+        </div>
+      );
+    }
+
+    if (!currentQuestion) return null;
+
+    return (
+      <div style={getFormSectionStyle(responsiveStyles, currentQuestion.type, showKeyboard)}>
+        <div style={getFormGroupStyle(responsiveStyles)}>
+          <div style={getQuestionStyle(responsiveStyles)}>{currentQuestion.question}</div>
+          
+          {currentQuestion.type === 'location' && (
+            <div style={{ position: 'relative', width: '100%' }}>
+              <input
+                ref={inputRef}
+                type="text"
+                value={formData[currentQuestion.id] || ''}
+                onChange={handleInputChange}
+                placeholder={currentQuestion.placeholder}
+                style={getLocationInputStyle(responsiveStyles)}
+                onFocus={() => setShowKeyboard(true)}
+              />
+              
+              {showSuggestions && locationSuggestions.length > 0 && (
+                <div style={getSuggestionsStyle(responsiveStyles)}>
+                  {locationSuggestions.map((suggestion, index) => (
+                    <div
+                      key={suggestion.id}
+                      style={{
+                        ...getSuggestionItemStyle(responsiveStyles),
+                        ...(index === selectedSuggestionIndex ? getSelectedSuggestionStyle() : {})
+                      }}
+                      onClick={() => handleSuggestionSelect(suggestion)}
+                    >
                       {suggestion.name}
                     </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        );
-      
-      case 'text':
-        return (
-          <div style={{ width: '100%' }}>
-            <input
-              type="text"
-              placeholder={currentQuestion.placeholder}
+                  ))}
+                </div>
+              )}
+              
+              {renderKeyboard()}
+            </div>
+          )}
+          
+          {currentQuestion.type === 'text' && currentQuestion.id !== 'location' && (
+            <div style={{ width: '100%' }}>
+              <input
+                type="text"
+                value={formData[currentQuestion.id] || ''}
+                onChange={handleInputChange}
+                placeholder={currentQuestion.placeholder}
+                style={getInputStyle(responsiveStyles)}
+                onFocus={() => setShowKeyboard(true)}
+              />
+              {renderKeyboard()}
+            </div>
+          )}
+          
+          {currentQuestion.type === 'select' && (
+            <select
               value={formData[currentQuestion.id] || ''}
-              onChange={(e) => handleInputChange(e.target.value)}
-              onFocus={handleInputFocus}
-              autoFocus
-              style={getInputStyle(responsiveStyles)}
-            />
-            {currentQuestion.id === 'contact' && showValidationError && formData[currentQuestion.id] && !validateCurrentField() && (
-              <div style={getValidationErrorStyle(responsiveStyles)}>
-                Please enter a valid email (with @) or 10-digit phone number
-              </div>
-            )}
-          </div>
-        );
-      
-      case 'select':
-        return (
-          <select
-            value={formData[currentQuestion.id] || ''}
-            onChange={(e) => {
-              handleInputChange(e.target.value);
+              onChange={handleSelectChange}
+              style={getSelectStyle(responsiveStyles)}
+              size={currentQuestion.options.length}
+            >
+              {currentQuestion.options.map(option => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          )}
+          
+          {showValidationError && !canAdvance && (
+            <div style={getValidationErrorStyle(responsiveStyles)}>
+              {currentQuestion.id === 'contact' 
+                ? 'Please enter a valid email or 10-digit phone number'
+                : currentQuestion.id === 'age'
+                ? 'Please select your age range'
+                : currentQuestion.id === 'gender'
+                ? 'Please select your gender'
+                : 'This field is required'}
+            </div>
+          )}
+        </div>
+
+        {currentQuestion.type !== 'select' && (
+          <button
+            onClick={handleNext}
+            style={{
+              ...getNextButtonStyle(responsiveStyles),
+              ...(canAdvance ? {} : getDisabledButtonStyle())
             }}
-            autoFocus
-            style={getSelectStyle(responsiveStyles)}
+            disabled={!canAdvance}
           >
-            <option value="" disabled style={getSelectPlaceholderStyle()}>
-              {currentQuestion.id === 'age' ? 'Select your age' : 'Select your gender'}
-            </option>
-            {currentQuestion.options.map((option, index) => (
-              <option key={index} value={option} style={getSelectOptionStyle()}>
-                {option}
-              </option>
-            ))}
-          </select>
-        );
-      
-      default:
-        return null;
-    }
+            {isLastStep ? 'Add Pin' : 'Next'}
+          </button>
+        )}
+      </div>
+    );
   };
 
   return (
     <div ref={containerRef} style={getContainerStyle(responsiveStyles)}>
-      {/* Scrollable Content Area */}
-      <div style={getScrollableContentStyle(responsiveStyles, showKeyboard)}>
-        
-        {/* Centered Content Container */}
-        <div style={getCenteredContentStyle(responsiveStyles)}>
+      <div style={getScrollableContentStyle(responsiveStyles)}>
+        <div style={getCenteredContentStyle(responsiveStyles, currentQuestion?.type, showKeyboard)}>
           
-          {/* Form Section */}
-          <div style={getFormSectionStyle(responsiveStyles)}>
-            <div style={getHeaderStyle(responsiveStyles)}>
-              <img 
-                src="/src/assets/logo.png" 
-                alt="Peg-Plug Logo" 
-                style={getLogoStyle(responsiveStyles)}
+          {/* Header Section */}
+          <div style={getHeaderStyle(responsiveStyles, showKeyboard && (currentQuestion?.type === 'text' || currentQuestion?.type === 'location'))}>
+            <img 
+              src="/src/assets/logo.png" 
+              alt="Logo" 
+              style={getLogoStyle(responsiveStyles)}
+            />
+            <p style={getSubtitleStyle(responsiveStyles)}>Pin your location and join our world</p>
+          </div>
+
+          {/* Progress Dots */}
+          <div style={getProgressDotsStyle(responsiveStyles, currentQuestion?.type)}>
+            {questions.map((_, index) => (
+              <div
+                key={index}
+                style={{
+                  ...getProgressDotStyle(responsiveStyles),
+                  ...(index === currentStep ? getActiveDotStyle() : {}),
+                  ...(index < currentStep ? getCompletedDotStyle() : {})
+                }}
               />
-              <p style={getSubtitleStyle(responsiveStyles)}>
-                Put Your City on the Map
-              </p>
-            </div>
-
-            {/* Form Content */}
-            {!isPinAddedStep && (
-              <>
-                {/* Progress Dots */}
-                <div style={getProgressDotsStyle(responsiveStyles)}>
-                  {questions.map((_, index) => (
-                    <div
-                      key={index}
-                      style={{
-                        ...getProgressDotStyle(responsiveStyles),
-                        ...(index < currentStep ? getCompletedDotStyle() : 
-                           index === currentStep ? getActiveDotStyle() : {})
-                      }}
-                    />
-                  ))}
-                </div>
-
-                {/* Current Question */}
-                <div style={getFormGroupStyle(responsiveStyles)}>
-                  <h3 style={getQuestionStyle(responsiveStyles)}>
-                    {currentQuestion.question}
-                  </h3>
-                  {renderInput()}
-                </div>
-
-                {/* Next Button - Only shows for text input fields (not dropdowns or location) */}
-                {currentQuestion.id !== 'location' && currentQuestion.type !== 'select' && (
-                  <button
-                    type="button"
-                    style={{
-                      ...getNextButtonStyle(responsiveStyles),
-                      ...(canAdvance ? {} : getDisabledButtonStyle())
-                    }}
-                    onClick={handleNext}
-                    disabled={!canAdvance}
-                  >
-                    {isLastStep ? 'Add Pin' : 'Continue'}
-                  </button>
-                )}
-              </>
-            )}
-
-            {/* Pin Added Confirmation */}
-            {isPinAddedStep && (
-              <div style={getPinAddedStyle(responsiveStyles)}>
-                <div style={getPinAddedIconStyle(responsiveStyles)}>📍</div>
-                <h2 style={getPinAddedTitleStyle(responsiveStyles)}>Pin Added!</h2>
-                <p style={getPinAddedSubtitleStyle(responsiveStyles)}>
-                  Thanks for putting your city on the map
-                </p>
-              </div>
-            )}
+            ))}
           </div>
 
-          {/* Stats Section with overlay when past first step - NOW USING DYNAMIC DATA */}
-          <div style={{
-            ...getStatsSectionStyle(responsiveStyles),
-            ...(currentStep > 0 ? getStatsOverlayStyle() : {})
-          }}>
-            {/* Top Cities */}
-            <div style={getStatsBlockStyle(responsiveStyles)}>
-              <h2 style={getStatsTitleStyle(responsiveStyles)}>📍 Top Cities</h2>
-              <div style={getTopCitiesStyle(responsiveStyles)}>
-                {topCities.map((city) => (
-                  <div
-                    key={city.rank}
-                    style={getCityCardStyle(responsiveStyles)}
-                    onClick={() => handleCityClick(city)}
-                  >
-                    <div style={getCityRankStyle(responsiveStyles)}>#{city.rank}</div>
-                    <div style={getCityMainStyle()}>
-                      <div style={getCityDetailsStyle()}>
-                        <div style={getCityNameStyle(responsiveStyles)}>{city.city}</div>
-                        <div style={getCityCountStyle(responsiveStyles)}>{city.visitors}</div>
-                      </div>
-                      <ReactCountryFlag 
-                        countryCode={city.countryCode}
-                        svg
-                        style={{
-                          width: '18px',
-                          height: '14px',
-                          marginLeft: '12px',
-                          flexShrink: 0
-                        }}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+          {/* Current Step */}
+          {renderCurrentStep()}
 
-            {/* Recent Visitors */}
-            <div style={getStatsBlockStyle(responsiveStyles)}>
-              <h2 style={getStatsTitleStyle(responsiveStyles)}>🌍 Recent</h2>
-              <div style={getRecentVisitorsStyle()}>
-                {recentVisitors.map((visitor, index) => (
-                  <div key={index} style={getVisitorCardStyle(responsiveStyles)}>
-                    <div style={getVisitorInfoStyle()}>
-                      <div style={getVisitorNameStyle(responsiveStyles)}>{visitor.name}</div>
-                      <div style={getVisitorLocationStyle(responsiveStyles)}>{visitor.city}</div>
-                    </div>
-                    <div style={getVisitorTimeStyle(responsiveStyles)}>{visitor.time}</div>
-                    <ReactCountryFlag 
-                      countryCode={visitor.countryCode}
-                      svg
-                      style={{
-                        width: '16px',
-                        height: '12px',
-                        marginLeft: '10px',
-                        flexShrink: 0
-                      }}
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
         </div>
       </div>
 
-      {/* Virtual Keyboard - Always Visible */}
-      {renderKeyboard()}
-
       {/* CSS for animations */}
       <style>{`
-        @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-        
         @keyframes bounce {
           0%, 20%, 60%, 100% { transform: translateY(0); }
           40% { transform: translateY(-10px); }
@@ -791,43 +557,15 @@ const FormFlow = ({ onFormSubmit, onLocationSelect, selectedLocation, resetTrigg
         select option {
           background-color: #1a1a1a !important;
           color: white !important;
+          padding: 12px !important;
           border: none !important;
-          padding: 8px 12px !important;
-          font-size: inherit !important;
-        }
-        
-        select option:disabled {
-          color: rgba(255, 255, 255, 0.5) !important;
-          font-style: italic !important;
-        }
-        
-        select option:checked {
-          background-color: #dc2626 !important;
-        }
-        
-        select::-webkit-scrollbar {
-          width: 8px;
-        }
-        
-        select::-webkit-scrollbar-track {
-          background: rgba(255, 255, 255, 0.05);
-          border-radius: 4px;
-        }
-        
-        select::-webkit-scrollbar-thumb {
-          background: rgba(255, 255, 255, 0.2);
-          border-radius: 4px;
-        }
-        
-        select::-webkit-scrollbar-thumb:hover {
-          background: rgba(255, 255, 255, 0.3);
         }
       `}</style>
     </div>
   );
 };
 
-// STYLE FUNCTIONS - All remain the same but here's the complete set:
+// STYLE FUNCTIONS
 
 const getContainerStyle = (styles) => ({
   color: 'white',
@@ -837,42 +575,60 @@ const getContainerStyle = (styles) => ({
   fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif",
   background: 'linear-gradient(180deg, #0a0a0a 0%, #1a1a1a 100%)',
   borderRight: '1px solid rgba(255, 255, 255, 0.08)',
-  overflow: 'hidden',
-  paddingBottom: '16px'
+  overflow: 'hidden'
 });
 
-const getScrollableContentStyle = (styles, showKeyboard) => ({
+const getScrollableContentStyle = (styles) => ({
   flex: 1,
   overflowY: 'auto',
   overflowX: 'hidden',
   display: 'flex',
-  justifyContent: 'center',
-  alignItems: 'flex-start',
+  justifyContent: 'center', // Center the content horizontally
+  alignItems: 'stretch',
   scrollbarWidth: 'none',
-  msOverflowStyle: 'none'
+  msOverflowStyle: 'none',
+  paddingBottom: '50px' // Reduced padding since no ticker
 });
 
-const getCenteredContentStyle = (styles) => ({
-  width: '100%',
-  maxWidth: `${styles.maxContentWidth}px`,
-  padding: `${styles.containerPadding}px ${Math.round(styles.containerPadding * 0.5)}px`,
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'center'
-});
+const getCenteredContentStyle = (styles, currentQuestionType, showKeyboard) => {
+  return {
+    width: '100%',
+    maxWidth: `${styles.maxContentWidth}px`,
+    margin: '0 auto', // Center horizontally
+    padding: `${Math.round(styles.containerPadding * 0.5)}px ${Math.round(styles.containerPadding * 0.3)}px`,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center', // Center vertically
+    minHeight: '100%'
+  };
+};
 
-const getHeaderStyle = (styles) => ({
+const getHeaderStyle = (styles, isCompactLayout) => ({
   textAlign: 'center',
   marginBottom: `${styles.sectionMargin}px`,
   width: '100%'
 });
 
-const getFormSectionStyle = (styles) => ({
-  width: '100%',
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'center',
-  marginBottom: `${styles.sectionMargin}px`
+const getFormSectionStyle = (styles, questionType, showKeyboard) => {
+  return {
+    width: '100%',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    marginBottom: `${styles.sectionMargin}px`, // Consistent margin
+    flex: 'none' // Don't grow or shrink
+  };
+};
+
+const getLogoStyle = (styles) => ({
+  maxWidth: '160px', // Increased from 120px
+  width: 'auto',
+  height: 'auto',
+  marginBottom: '12px', // Increased from 8px
+  display: 'block',
+  objectFit: 'contain',
+  margin: '0 auto 12px auto' // Increased margin
 });
 
 const getTitleStyle = (styles) => ({
@@ -884,15 +640,6 @@ const getTitleStyle = (styles) => ({
   textAlign: 'center'
 });
 
-const getLogoStyle = (styles) => ({
-  maxWidth: '100%',
-  height: 'auto',
-  maxHeight: `${Math.round(styles.titleFontSize * 2.5)}px`,
-  marginBottom: '16px',
-  display: 'block',
-  margin: '0 auto 16px auto'
-});
-
 const getSubtitleStyle = (styles) => ({
   fontSize: `${styles.subtitleFontSize}px`,
   color: 'rgba(255, 255, 255, 0.6)',
@@ -901,10 +648,10 @@ const getSubtitleStyle = (styles) => ({
   textAlign: 'center'
 });
 
-const getProgressDotsStyle = (styles) => ({
+const getProgressDotsStyle = (styles, questionType) => ({
   display: 'flex',
   gap: `${Math.round(8 * (styles.dotSize / 8))}px`,
-  marginBottom: `${styles.sectionMargin}px`,
+  marginBottom: `${styles.sectionMargin}px`, // Consistent margin
   justifyContent: 'center',
   width: '100%'
 });
@@ -917,12 +664,12 @@ const getProgressDotStyle = (styles) => ({
 });
 
 const getActiveDotStyle = () => ({
-  background: '#dc2626',
+  background: '#f44336', // Changed to red
   transform: 'scale(1.2)'
 });
 
 const getCompletedDotStyle = () => ({
-  background: '#f87171'
+  background: '#ff7961' // Changed to light red
 });
 
 const getFormGroupStyle = (styles) => ({
@@ -947,40 +694,34 @@ const getInputStyle = (styles) => ({
   width: '100%',
   padding: `${styles.inputPadding}px ${styles.inputPadding + 2}px`,
   background: 'rgba(255, 255, 255, 0.04)',
-  border: 'none',
+  border: '1px solid rgba(255, 255, 255, 0.12)',
   borderRadius: `${Math.round(10 * (styles.inputPadding / 12))}px`,
   color: 'white',
   fontSize: `${styles.inputFontSize}px`,
   fontFamily: "'Inter', sans-serif",
   outline: 'none',
-  textAlign: 'center'
+  textAlign: 'center',
+  marginBottom: `${styles.inputPadding}px`
 });
 
 const getLocationInputStyle = (styles) => ({
-  width: '120%',
-  maxWidth: '450px',
-  margin: '0 auto',
-  paddingTop: `${styles.inputPadding}px`,
-  paddingBottom: `${styles.inputPadding}px`,
-  paddingLeft: `${styles.inputPadding + 2}px`,
-  paddingRight: `${styles.inputPadding + 2}px`,
+  width: '100%',
+  padding: `${styles.inputPadding}px ${styles.inputPadding + 2}px`,
   background: 'rgba(255, 255, 255, 0.04)',
-  border: 'none',
+  border: '1px solid rgba(255, 255, 255, 0.12)',
   borderRadius: `${Math.round(10 * (styles.inputPadding / 12))}px`,
   color: 'white',
   fontSize: `${styles.inputFontSize}px`,
   fontFamily: "'Inter', sans-serif",
   outline: 'none',
-  textAlign: 'center'
+  textAlign: 'center',
+  marginBottom: `${styles.inputPadding}px`
 });
 
 const getNextButtonStyle = (styles) => ({
   width: '100%',
-  paddingTop: `${styles.buttonPadding}px`,
-  paddingBottom: `${styles.buttonPadding}px`,
-  paddingLeft: `${styles.buttonPadding + 4}px`,
-  paddingRight: `${styles.buttonPadding + 4}px`,
-  background: 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)',
+  padding: `${styles.buttonPadding}px ${styles.buttonPadding + 4}px`,
+  background: 'linear-gradient(135deg, #f44336 0%, #d32f2f 100%)',
   border: 'none',
   borderRadius: `${Math.round(10 * (styles.buttonPadding / 12))}px`,
   color: 'white',
@@ -995,212 +736,37 @@ const getDisabledButtonStyle = () => ({
   cursor: 'not-allowed'
 });
 
-const getStatsSectionStyle = (styles) => ({
+const getSelectStyle = (styles) => ({
   width: '100%',
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'center'
-});
-
-const getStatsBlockStyle = (styles) => ({
-  width: '100%',
-  marginBottom: `${styles.sectionMargin * 0.8}px`,
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'center'
-});
-
-const getStatsTitleStyle = (styles) => ({
-  fontSize: `${Math.round(16 * (styles.titleFontSize / 28))}px`,
-  fontWeight: '500',
+  maxWidth: '350px', // Limit width for better centering
+  padding: `${styles.inputPadding}px`,
+  background: 'rgba(30, 30, 30, 0.95)',
+  border: '1px solid rgba(255, 255, 255, 0.12)',
+  borderRadius: `${Math.round(10 * (styles.inputPadding / 12))}px`,
   color: 'white',
-  marginBottom: `${styles.inputPadding}px`,
-  letterSpacing: '-0.01em',
-  textAlign: 'center',
-  width: '100%'
-});
-
-const getTopCitiesStyle = (styles) => ({
-  display: 'flex',
-  flexDirection: 'column',
-  gap: `${Math.round(8 * (styles.inputPadding / 12))}px`,
-  width: '100%'
-});
-
-const getCityCardStyle = (styles) => ({
-  display: 'flex',
-  alignItems: 'center',
-  padding: `${Math.round(12 * (styles.inputPadding / 12))}px`,
-  background: 'rgba(255, 255, 255, 0.02)',
-  border: '1px solid rgba(255, 255, 255, 0.05)',
-  borderRadius: `${Math.round(8 * (styles.inputPadding / 12))}px`,
+  fontSize: `${styles.selectFontSize}px`,
+  fontFamily: "'Inter', sans-serif",
+  outline: 'none',
   cursor: 'pointer',
-  width: '100%'
+  appearance: 'none',
+  backgroundImage: 'none',
+  maxHeight: '250px', // Reasonable max height
+  overflowY: 'auto',
+  textAlign: 'center' // Center the text in options
 });
 
-const getCityRankStyle = (styles) => ({
-  fontSize: `${Math.round(11 * (styles.cityNameFontSize / 12))}px`,
-  fontWeight: '600',
-  color: '#f87171',
-  minWidth: `${Math.round(20 * (styles.inputPadding / 12))}px`,
-  marginRight: `${Math.round(12 * (styles.inputPadding / 12))}px`,
-  textAlign: 'center'
-});
-
-const getCityMainStyle = () => ({
-  display: 'flex',
-  alignItems: 'center',
-  flex: '1',
-  justifyContent: 'space-between'
-});
-
-const getCityDetailsStyle = () => ({
-  flex: '1'
-});
-
-const getCityNameStyle = (styles) => ({
-  fontSize: `${styles.cityNameFontSize}px`,
-  fontWeight: '500',
-  color: 'white',
-  marginBottom: '2px'
-});
-
-const getCityCountStyle = (styles) => ({
-  fontSize: `${Math.round(10 * (styles.cityNameFontSize / 12))}px`,
-  color: '#f87171',
-  fontWeight: '500'
-});
-
-const getRecentVisitorsStyle = () => ({
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '6px',
-  width: '100%'
-});
-
-const getVisitorCardStyle = (styles) => ({
-  display: 'flex',
-  alignItems: 'center',
-  padding: `${Math.round(10 * (styles.inputPadding / 12))}px`,
-  background: 'rgba(255, 255, 255, 0.015)',
-  borderRadius: `${Math.round(6 * (styles.inputPadding / 12))}px`,
-  width: '100%'
-});
-
-const getVisitorInfoStyle = () => ({
-  flex: '1'
-});
-
-const getVisitorNameStyle = (styles) => ({
-  fontSize: `${styles.visitorNameFontSize}px`,
-  fontWeight: '500',
-  color: 'white',
-  marginBottom: '2px'
-});
-
-const getVisitorLocationStyle = (styles) => ({
-  fontSize: `${Math.round(9 * (styles.visitorNameFontSize / 11))}px`,
-  color: 'rgba(255, 255, 255, 0.6)'
-});
-
-const getVisitorTimeStyle = (styles) => ({
-  fontSize: `${Math.round(9 * (styles.visitorNameFontSize / 11))}px`,
-  color: 'rgba(248, 113, 113, 0.8)',
-  fontWeight: '500',
-  marginRight: '10px'
-});
-
-const getKeyboardStyle = (styles) => ({
-  backgroundColor: 'rgba(15, 15, 15, 0.95)',
-  border: '1px solid rgba(255, 255, 255, 0.15)',
-  borderTop: '1px solid rgba(255, 255, 255, 0.2)',
-  borderRadius: '12px 12px 8px 8px',
-  padding: `${Math.round(styles.containerPadding * 0.4)}px`,
-  margin: `0 8px 8px 8px`,
-  display: 'flex',
-  flexDirection: 'column',
-  gap: `${Math.round(styles.containerPadding * 0.15)}px`,
-  height: `${styles.keyboardHeight}px`,
-  backdropFilter: 'blur(10px)',
-  flexShrink: 0,
-  boxSizing: 'border-box',
-  overflow: 'hidden'
-});
-
-const getKeyboardRowStyle = (styles) => ({
-  display: 'flex',
-  justifyContent: 'center',
-  gap: `${styles.containerPadding / 4}px`,
-  flex: 1
-});
-
-const getKeyboardKeyStyle = (styles, key) => {
-  const isSpecial = ['shift', 'backspace', 'space', 'enter'].includes(key);
-  const isSpace = key === 'space';
-  
-  return {
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    border: '1px solid rgba(255, 255, 255, 0.15)',
-    borderRadius: `${Math.round(6 * (styles.inputPadding / 12))}px`,
-    color: 'white',
-    fontSize: `${Math.round(styles.inputFontSize * 0.9)}px`,
-    fontFamily: "'Inter', sans-serif",
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: `${Math.round(36 * (styles.inputPadding / 12))}px`,
-    flex: isSpace ? 3 : isSpecial ? 1.5 : 1,
-    fontWeight: isSpecial ? '500' : '400',
-    outline: 'none',
-    userSelect: 'none',
-    touchAction: 'manipulation'
-  };
-};
-
-const getKeyboardKeyActiveStyle = () => ({
-  backgroundColor: 'rgba(220, 38, 38, 0.3)',
-  borderColor: 'rgba(220, 38, 38, 0.5)'
-});
-
-const getSuggestionsStyle = (styles, showKeyboard, keyboardHeight) => ({
+const getSuggestionsStyle = (styles) => ({
   position: 'absolute',
   top: '100%',
   left: 0,
   right: 0,
   background: 'rgba(20, 20, 20, 0.95)',
-  border: 'none',
+  border: '1px solid rgba(255, 255, 255, 0.12)',
   borderRadius: `${Math.round(8 * (styles.inputPadding / 12))}px`,
   marginTop: '4px',
-  height: 'auto',
-  maxHeight: 'none',
-  overflow: 'hidden',
   zIndex: 1000,
-  backdropFilter: 'blur(10px)'
-});
-
-const getSelectStyle = (styles) => ({
-  ...getInputStyle(styles),
-  fontSize: `${styles.selectFontSize}px`,
-  cursor: 'pointer',
-  background: 'rgba(255, 255, 255, 0.08)',
-  border: 'none',
-  color: 'white',
-  appearance: 'none',
-  backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e")`,
-  backgroundRepeat: 'no-repeat',
-  backgroundPosition: `right ${styles.inputPadding}px center`,
-  backgroundSize: '16px',
-  paddingRight: `${styles.inputPadding + 24}px`,
-  minHeight: `${Math.round(48 * (styles.inputPadding / 12))}px`,
-  display: 'flex',
-  alignItems: 'center'
-});
-
-const getStatsOverlayStyle = () => ({
-  position: 'relative',
-  opacity: 0.15,
-  pointerEvents: 'none'
+  backdropFilter: 'blur(10px)',
+  marginBottom: `${styles.inputPadding}px`
 });
 
 const getSuggestionItemStyle = (styles) => ({
@@ -1208,15 +774,137 @@ const getSuggestionItemStyle = (styles) => ({
   cursor: 'pointer',
   fontSize: `${styles.inputFontSize}px`,
   backgroundColor: 'transparent',
-  color: 'white'
+  color: 'white',
+  borderBottom: '1px solid rgba(255, 255, 255, 0.05)'
 });
 
 const getSelectedSuggestionStyle = () => ({
-  background: 'rgba(220, 38, 38, 0.2)',
-  borderColor: 'rgba(220, 38, 38, 0.3)',
-  backgroundColor: 'rgba(220, 38, 38, 0.15)'
+  background: 'rgba(244, 67, 54, 0.2)', // Changed to red
+  backgroundColor: 'rgba(244, 67, 54, 0.15)' // Changed to red
 });
 
+// Inline keyboard that appears below input - WIDER AND BIGGER
+const getInlineKeyboardStyle = (styles) => ({
+  width: '110%', // Wider than container
+  maxWidth: '520px', // Increased from 480px
+  background: 'rgba(15, 15, 15, 0.95)',
+  borderRadius: `${Math.round(10 * (styles.inputPadding / 12))}px`, // Increased from 8
+  padding: `8px`, // Increased from 4px
+  marginTop: `${styles.inputPadding}px`,
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '6px', // Increased from 4px
+  border: '1px solid rgba(255, 255, 255, 0.08)',
+  marginLeft: '-5%', // Center the wider keyboard
+  marginRight: '-5%'
+});
+
+const getKeyboardRowStyle = () => ({
+  display: 'flex',
+  gap: '6px', // Increased from 4px
+  justifyContent: 'center',
+  width: '100%'
+});
+
+const getKeyboardKeyStyle = (styles, key) => {
+  const isSpecial = ['shift', 'backspace', 'space', 'enter'].includes(key);
+  return {
+    background: 'rgba(255, 255, 255, 0.08)',
+    border: '1px solid rgba(255, 255, 255, 0.15)',
+    borderRadius: '6px', // Increased from 4px
+    color: 'white',
+    cursor: 'pointer',
+    fontSize: `${Math.round(styles.inputFontSize * 0.9)}px`, // Increased from 0.85
+    padding: '8px', // Increased from 6px
+    minWidth: isSpecial ? '60px' : '40px', // Increased from 50px/32px
+    flex: key === 'space' ? 3 : isSpecial ? 1.5 : 1,
+    fontWeight: isSpecial ? '500' : '400',
+    outline: 'none',
+    userSelect: 'none',
+    touchAction: 'manipulation'
+  };
+};
+
+// Stock ticker styles - Only for Top Cities
+const getTickerContainerStyle = () => ({
+  position: 'fixed',
+  bottom: 0,
+  left: 0,
+  right: '58%',
+  height: '40px', // Half height since only one ticker
+  background: 'rgba(0, 0, 0, 0.95)',
+  borderTop: '1px solid rgba(255, 255, 255, 0.1)',
+  display: 'flex',
+  flexDirection: 'column',
+  animation: 'redGlow 2s ease-in-out infinite',
+  zIndex: 999
+});
+
+const getTickerSectionStyle = () => ({
+  flex: 1,
+  display: 'flex',
+  alignItems: 'center',
+  overflow: 'hidden'
+});
+
+const getTickerLabelStyle = () => ({
+  minWidth: '100px',
+  padding: '0 12px',
+  fontSize: '10px',
+  fontWeight: '600',
+  color: '#ff4444',
+  textShadow: '0 0 8px rgba(244, 67, 54, 0.5)',
+  borderRight: '1px solid rgba(255, 255, 255, 0.1)',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center'
+});
+
+const getTickerScrollStyle = () => ({
+  flex: 1,
+  overflow: 'hidden',
+  position: 'relative'
+});
+
+const getTickerContentStyle = () => ({
+  display: 'flex',
+  animation: 'tickerScroll 20s linear infinite',
+  whiteSpace: 'nowrap'
+});
+
+const getTickerItemStyle = () => ({
+  display: 'flex',
+  alignItems: 'center',
+  padding: '0 20px',
+  fontSize: '11px',
+  color: 'white',
+  minWidth: 'max-content'
+});
+
+const getTickerRankStyle = () => ({
+  color: '#81d4fa',
+  fontWeight: '600',
+  marginRight: '6px'
+});
+
+const getTickerVisitorsStyle = () => ({
+  color: '#81d4fa',
+  marginLeft: '8px',
+  fontWeight: '500'
+});
+
+const getTickerLocationStyle = () => ({
+  color: '#81d4fa',
+  marginLeft: '8px'
+});
+
+const getTickerTimeStyle = () => ({
+  color: 'rgba(255, 255, 255, 0.6)',
+  marginLeft: '8px',
+  fontSize: '10px'
+});
+
+// Pin Added confirmation styles
 const getPinAddedStyle = (styles) => ({
   display: 'flex',
   flexDirection: 'column',
@@ -1235,7 +923,7 @@ const getPinAddedIconStyle = (styles) => ({
 const getPinAddedTitleStyle = (styles) => ({
   fontSize: `${Math.round(styles.titleFontSize * 1.2)}px`,
   fontWeight: '500',
-  color: '#f87171',
+  color: '#81d4fa',
   marginBottom: `${styles.inputPadding / 2}px`,
   letterSpacing: '0.02em'
 });
@@ -1252,16 +940,6 @@ const getValidationErrorStyle = (styles) => ({
   marginTop: `${Math.round(styles.inputPadding * 0.5)}px`,
   textAlign: 'center',
   fontWeight: '400'
-});
-
-const getSelectPlaceholderStyle = () => ({
-  color: 'rgba(255, 255, 255, 0.5)',
-  fontStyle: 'italic'
-});
-
-const getSelectOptionStyle = () => ({
-  color: 'white',
-  backgroundColor: '#1a1a1a'
 });
 
 export default FormFlow;
