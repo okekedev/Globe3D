@@ -1,4 +1,4 @@
-// App.jsx - Updated with Pin Management Integration
+// App.jsx - Updated for Vertical Layout (Globe on Top)
 import React, { useState, useRef, useCallback } from 'react';
 import './App.css';
 import KioskGlobe from './components/KioskGlobe';
@@ -44,18 +44,7 @@ function App() {
 
   return (
     <div className="app-container">
-      {/* Left Side - Form Flow & Top Cities (33%) */}
-      <div className="left-panel">
-        <FormFlow
-          onFormSubmit={handleFormSubmit}
-          onLocationSelect={handleLocationSelect}
-          selectedLocation={selectedLocation}
-          resetTrigger={resetTrigger} // Pass reset trigger to FormFlow
-          metricsData={metricsData} // NEW: Pass dynamic metrics data
-        />
-      </div>
-
-      {/* Right Side - Full Globe Display (67%) */}
+      {/* Top Section - Globe Display (65%) */}
       <div className="right-panel">
         <KioskGlobe
           ref={globeRef} // NEW: Reference for accessing globe methods
@@ -65,6 +54,17 @@ function App() {
           interactiveMode={false}
           onFormReset={handleFormReset} // Pass reset callback to Globe
           onMetricsUpdate={handleMetricsUpdate} // NEW: Pass metrics callback
+        />
+      </div>
+
+      {/* Bottom Section - Form Flow (35%) */}
+      <div className="left-panel">
+        <FormFlow
+          onFormSubmit={handleFormSubmit}
+          onLocationSelect={handleLocationSelect}
+          selectedLocation={selectedLocation}
+          resetTrigger={resetTrigger} // Pass reset trigger to FormFlow
+          metricsData={metricsData} // NEW: Pass dynamic metrics data
         />
       </div>
     </div>
