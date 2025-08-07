@@ -243,6 +243,48 @@ const KioskGlobe = React.memo(({
     }
   }, []); // EMPTY dependency array - only run on mount
 
+  // Show visual notification when pin is added
+  const showPinAddedNotification = useCallback((pin, isNewCity) => {
+    // Create notification element
+    const notification = document.createElement('div');
+    notification.style.cssText = `
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: linear-gradient(135deg, #10b981, #059669);
+      color: white;
+      padding: 16px 24px;
+      border-radius: 12px;
+      font-family: 'Inter', sans-serif;
+      font-weight: 600;
+      font-size: 16px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+      z-index: 10000;
+      animation: pinNotification 3s ease-out forwards;
+      text-align: center;
+      min-width: 250px;
+    `;
+    
+    notification.innerHTML = `
+      <div style="font-size: 24px; margin-bottom: 8px;">📍</div>
+      <div>${isNewCity ? 'New Location!' : 'Pin Added!'}</div>
+      <div style="font-size: 14px; opacity: 0.9; margin-top: 4px;">
+        ${pin.cityName} • ${pin.userName}
+      </div>
+      ${!isNewCity ? `<div style="font-size: 12px; opacity: 0.8; margin-top: 4px;">Now ${pin.totalCityPins} pins in this city</div>` : ''}
+    `;
+    
+    document.body.appendChild(notification);
+    
+    // Remove notification after animation
+    setTimeout(() => {
+      if (notification.parentNode) {
+        notification.parentNode.removeChild(notification);
+      }
+    }, 3000);
+  }, []);
+
   // Add/update pins on map
   const updatePinsOnMap = useCallback(() => {
     if (!mapInstance.current || globalPins.length === 0) return;
@@ -277,20 +319,23 @@ const KioskGlobe = React.memo(({
         const root = createRoot(popupContainer);
         
         root.render(
-          <div style={{ fontFamily: "'Inter', sans-serif", padding: '8px' }}>
-            <h3 style={{ margin: '0 0 8px 0', fontSize: '14px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <ReactCountryFlag 
-                countryCode={pin.countryCode}
-                svg
-                style={{ width: '16px', height: '12px' }}
-              />
-              {pin.cityName}, {pin.state}
-            </h3>
-            <p style={{ margin: '0', fontSize: '12px', color: '#666' }}>
-              📍 {pin.userName}<br />
-              🕐 {getTimeAgo(pin.timestamp)}
-            </p>
-          </div>
+          React.createElement('div', { style: { fontFamily: "'Inter', sans-serif", padding: '8px' } },
+            React.createElement('h3', { 
+              style: { margin: '0 0 8px 0', fontSize: '14px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' } 
+            },
+              React.createElement(ReactCountryFlag, {
+                countryCode: pin.countryCode,
+                svg: true,
+                style: { width: '16px', height: '12px' }
+              }),
+              `${pin.cityName}, ${pin.state}`
+            ),
+            React.createElement('p', { style: { margin: '0', fontSize: '12px', color: '#666' } },
+              `📍 ${pin.userName}`,
+              React.createElement('br'),
+              `🕐 ${getTimeAgo(pin.timestamp)}`
+            )
+          )
         );
 
         const popup = new mapboxgl.Popup({ offset: 25 })
@@ -313,23 +358,25 @@ const KioskGlobe = React.memo(({
         const root = createRoot(popupContainer);
         
         root.render(
-          <div style={{ fontFamily: "'Inter', sans-serif", padding: '12px', minWidth: '200px' }}>
-            <h3 style={{ margin: '0 0 8px 0', fontSize: '16px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <ReactCountryFlag 
-                countryCode={mainPin.countryCode}
-                svg
-                style={{ width: '18px', height: '14px' }}
-              />
-              {mainPin.cityName}, {mainPin.state}
-            </h3>
-            <div style={{ margin: '8px 0', padding: '8px', background: '#f5f5f5', borderRadius: '6px' }}>
-              <strong style={{ color: '#dc2626', fontSize: '18px' }}>{cityPins.length}</strong>
-              <span style={{ fontSize: '12px', color: '#666', marginLeft: '4px' }}>pins</span>
-            </div>
-            <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#666' }}>
-              🕐 Latest: {latestPin.userName} ({getTimeAgo(latestPin.timestamp)})
-            </p>
-          </div>
+          React.createElement('div', { style: { fontFamily: "'Inter', sans-serif", padding: '12px', minWidth: '200px' } },
+            React.createElement('h3', { 
+              style: { margin: '0 0 8px 0', fontSize: '16px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' } 
+            },
+              React.createElement(ReactCountryFlag, {
+                countryCode: mainPin.countryCode,
+                svg: true,
+                style: { width: '18px', height: '14px' }
+              }),
+              `${mainPin.cityName}, ${mainPin.state}`
+            ),
+            React.createElement('div', { style: { margin: '8px 0', padding: '8px', background: '#f5f5f5', borderRadius: '6px' } },
+              React.createElement('strong', { style: { color: '#dc2626', fontSize: '18px' } }, cityPins.length),
+              React.createElement('span', { style: { fontSize: '12px', color: '#666', marginLeft: '4px' } }, 'pins')
+            ),
+            React.createElement('p', { style: { margin: '4px 0 0 0', fontSize: '12px', color: '#666' } },
+              `🕐 Latest: ${latestPin.userName} (${getTimeAgo(latestPin.timestamp)})`
+            )
+          )
         );
 
         const popup = new mapboxgl.Popup({ offset: 25 })
@@ -347,8 +394,18 @@ const KioskGlobe = React.memo(({
     updatePinsOnMap();
   }, [updatePinsOnMap]);
 
-  // Add a new pin (called from FormFlow) - STABILIZED
+  // Add a new pin (called from FormFlow) - ENHANCED WITH VISUAL FEEDBACK
   const addNewPin = useCallback((locationData, userData) => {
+    console.log('🆕 Adding new pin for:', locationData, userData);
+    
+    // Check if this city already exists
+    const existingCityPins = globalPins.filter(pin => 
+      Math.abs(pin.coordinates[0] - locationData.lng) < 0.1 && 
+      Math.abs(pin.coordinates[1] - locationData.lat) < 0.1
+    );
+    
+    const isNewCity = existingCityPins.length === 0;
+    
     const newPin = {
       id: Date.now(),
       cityName: locationData.shortName || locationData.name,
@@ -358,11 +415,14 @@ const KioskGlobe = React.memo(({
       coordinates: [locationData.lng, locationData.lat],
       timestamp: new Date(),
       userName: userData.name || 'Anonymous',
-      totalCityPins: 1
+      totalCityPins: existingCityPins.length + 1,
+      isNewPin: true // Mark as newly added for visual feedback
     };
 
     setGlobalPins(prev => {
       const updated = [newPin, ...prev];
+      
+      console.log(`📍 Pin added! ${isNewCity ? 'NEW CITY' : 'EXISTING CITY'} - Total pins in city: ${newPin.totalCityPins}`);
       
       // Update metrics - but prevent infinite loops
       setTimeout(() => {
@@ -376,8 +436,9 @@ const KioskGlobe = React.memo(({
       return updated;
     });
 
-    console.log('📍 Added new pin:', newPin);
-  }, []); // EMPTY dependency array to prevent re-renders
+    // Show visual notification for pin addition
+    showPinAddedNotification(newPin, isNewCity);
+  }, [globalPins, onMetricsUpdate, showPinAddedNotification]); // Added dependencies
 
   // Smooth rotation animation - PREVENT MULTIPLE STARTS
   const startAnimation = useCallback(() => {
@@ -393,7 +454,7 @@ const KioskGlobe = React.memo(({
 
       const center = mapInstance.current.getCenter();
       const currentZoom = mapInstance.current.getZoom();
-      const newLng = center.lng + 0.1;
+      const newLng = center.lng + 2.0; // 3x faster rotation
       
       mapInstance.current.easeTo({
         center: [newLng, center.lat],
@@ -814,22 +875,6 @@ const KioskGlobe = React.memo(({
         }}
       />
 
-      {/* Pin count indicator */}
-      <div style={{
-        position: 'absolute',
-        top: '20px',
-        right: '20px',
-        background: 'rgba(0, 0, 0, 0.7)',
-        color: 'white',
-        padding: '8px 12px',
-        borderRadius: '6px',
-        fontSize: '12px',
-        fontFamily: "'Inter', sans-serif",
-        zIndex: 1000
-      }}>
-        📍 {globalPins.length} pins worldwide
-      </div>
-
       {/* Loading overlay */}
       {isLoading && (
         <div style={{
@@ -911,6 +956,28 @@ const KioskGlobe = React.memo(({
         @keyframes spin {
           0% { transform: rotate(0deg); }
           100% { transform: rotate(360deg); }
+        }
+        
+        @keyframes pinNotification {
+          0% { 
+            opacity: 0; 
+            transform: translate(-50%, -50%) scale(0.8); 
+          }
+          10% { 
+            opacity: 1; 
+            transform: translate(-50%, -50%) scale(1.05); 
+          }
+          20% { 
+            transform: translate(-50%, -50%) scale(1); 
+          }
+          80% { 
+            opacity: 1; 
+            transform: translate(-50%, -50%) scale(1); 
+          }
+          100% { 
+            opacity: 0; 
+            transform: translate(-50%, -50%) scale(0.9); 
+          }
         }
       `}</style>
     </div>
