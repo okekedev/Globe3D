@@ -6,6 +6,7 @@ An interactive 3D globe kiosk application that allows visitors to add their loca
   <source src="./public/demo.mp4" type="video/mp4">
   Your browser does not support the video tag.
 </video>
+
 ## ✨ Features
 
 - 🌍 **Interactive 3D Globe** - Smooth rotating globe with custom Mapbox styling
