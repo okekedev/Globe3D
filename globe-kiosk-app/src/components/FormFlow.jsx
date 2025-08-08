@@ -895,7 +895,6 @@ const getInlineKeyboardStyle = (styles) => ({
   marginTop: `4px`,
   display: 'flex',
   flexDirection: 'column',
-  
   gap: '1px',
   border: '1px solid rgba(255, 255, 255, 0.08)',
   marginLeft: '0',
