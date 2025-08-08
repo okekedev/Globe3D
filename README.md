@@ -1,9 +1,8 @@
 # 🌍 Globe Kiosk App
 An interactive 3D globe kiosk application that allows visitors to add their location pins with smooth animations and real-time tracking.
 
-## 🎥 Demo
 <video width="600" controls>
-  <source src="./public/demo.mp4" type="video/mp4">
+  <source src="./globe-kiosk-app/public/demo.mp4" type="video/mp4">
   Your browser does not support the video tag.
 </video>
 
