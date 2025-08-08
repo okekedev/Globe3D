@@ -629,7 +629,7 @@ const FormFlow = ({ onFormSubmit, onLocationSelect, selectedLocation, resetTrigg
           {/* Header Section */}
           <div style={getHeaderStyle(responsiveStyles, showKeyboard && (currentQuestion?.type === 'text' || currentQuestion?.type === 'location'))}>
             <img 
-              src="/src/assets/logo.png" 
+              src="/logo.png" 
               alt="Logo" 
               style={getLogoStyle(responsiveStyles)}
             />
