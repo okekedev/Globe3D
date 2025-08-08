@@ -711,7 +711,7 @@ const getCenteredContentStyle = (styles, currentQuestionType, showKeyboard) => {
     alignItems: 'center',
     justifyContent: showKeyboard ? 'flex-start' : 'center', // When keyboard shows, align to top so logo slides up
     minHeight: '100%',
-    paddingTop: showKeyboard ? '8px' : `${Math.round(styles.containerPadding * 0.4)}px` // Less top padding when keyboard is visible
+    paddingTop: showKeyboard ? '4px' : `${Math.round(styles.containerPadding * 0.4)}px` // Less top padding when keyboard is visible
   };
 };
 
