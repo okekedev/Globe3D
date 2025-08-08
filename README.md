@@ -2,10 +2,7 @@
 An interactive 3D globe kiosk application that allows visitors to add their location pins with smooth animations and real-time tracking.
 
 ## 🎥 Demo
-<video width="600" controls>
-  <source src="https://github.com/user-attachments/assets/fd2c75f3-00ad-491d-9f78-a5be4406e8c4" type="video/mp4">
-  Your browser does not support the video tag.
-</video>
+https://github.com/user-attachments/assets/fd2c75f3-00ad-491d-9f78-a5be4406e8c4
 
 ## ✨ Features
 
