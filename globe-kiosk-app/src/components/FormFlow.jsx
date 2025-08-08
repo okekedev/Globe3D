@@ -353,23 +353,23 @@ const FormFlow = ({ onFormSubmit, onLocationSelect, selectedLocation, resetTrigg
     }
   }, [currentQuestion, formData, isShiftPressed, keyboardMode, handleLocationInputChange, handleNext, canAdvance, showSuggestions, selectedSuggestionIndex, handleSuggestionSelect, locationSuggestions, handleEmailDomainSelect]);
 
-  // Handle input field changes
+  // Handle input field changes - NO LONGER NEEDED since inputs are readonly
   const handleInputChange = useCallback((e) => {
-    if (!currentQuestion) return;
-    
-    const { value } = e.target;
-    setShowValidationError(false);
-    
-    if (currentQuestion.id === 'location') {
-      handleLocationInputChange(value);
-    } else {
-      setFormData(prev => ({ ...prev, [currentQuestion.id]: value }));
-    }
-  }, [currentQuestion, handleLocationInputChange]);
+    // This function is now mainly for compatibility but shouldn't be called
+    // since inputs are readonly and only the virtual keyboard should update values
+  }, []);
 
-  // Handle input focus - show keyboard for text inputs
-  const handleInputFocus = useCallback(() => {
+  // Handle input focus/touch - show keyboard and prevent device keyboard
+  const handleInputInteraction = useCallback((e) => {
     if (!currentQuestion) return;
+    
+    // Prevent default behavior that might trigger device keyboard
+    e.preventDefault();
+    
+    // Blur the input immediately to prevent device keyboard
+    if (e.target) {
+      e.target.blur();
+    }
     
     if (currentQuestion.type === 'text' || currentQuestion.type === 'location' || currentQuestion.type === 'contact') {
       setShowKeyboard(true);
@@ -484,10 +484,13 @@ const FormFlow = ({ onFormSubmit, onLocationSelect, selectedLocation, resetTrigg
                   ref={inputRef}
                   type="text"
                   value={formData[currentQuestion.id] || ''}
-                  onChange={handleInputChange}
                   placeholder={currentQuestion.placeholder}
                   style={{ ...getLocationInputStyle(responsiveStyles), flex: 1, marginBottom: 0 }}
-                  onFocus={() => setShowKeyboard(true)}
+                  readOnly={true}
+                  inputMode="none"
+                  onTouchStart={handleInputInteraction}
+                  onClick={handleInputInteraction}
+                  onFocus={handleInputInteraction}
                 />
                 
                 <button
@@ -515,10 +518,13 @@ const FormFlow = ({ onFormSubmit, onLocationSelect, selectedLocation, resetTrigg
                 <input
                   type="text"
                   value={formData[currentQuestion.id] || ''}
-                  onChange={handleInputChange}
                   placeholder={currentQuestion.placeholder}
                   style={{ ...getInputStyle(responsiveStyles), flex: 1, marginBottom: 0 }}
-                  onFocus={() => setShowKeyboard(true)}
+                  readOnly={true}
+                  inputMode="none"
+                  onTouchStart={handleInputInteraction}
+                  onClick={handleInputInteraction}
+                  onFocus={handleInputInteraction}
                 />
                 
                 <button
@@ -545,10 +551,13 @@ const FormFlow = ({ onFormSubmit, onLocationSelect, selectedLocation, resetTrigg
                 <input
                   type="text"
                   value={formData[currentQuestion.id] || ''}
-                  onChange={handleInputChange}
                   placeholder={currentQuestion.placeholder}
                   style={{ ...getInputStyle(responsiveStyles), flex: 1, marginBottom: 0 }}
-                  onFocus={() => setShowKeyboard(true)}
+                  readOnly={true}
+                  inputMode="none"
+                  onTouchStart={handleInputInteraction}
+                  onClick={handleInputInteraction}
+                  onFocus={handleInputInteraction}
                 />
                 
                 <button
@@ -669,6 +678,34 @@ const FormFlow = ({ onFormSubmit, onLocationSelect, selectedLocation, resetTrigg
           color: white !important;
           padding: 12px !important;
           border: none !important;
+        }
+        
+        /* Additional styles to prevent virtual keyboard */
+        input[readonly] {
+          cursor: pointer;
+          caret-color: transparent;
+        }
+        
+        /* Prevent zoom on input focus (iOS Safari) */
+        input {
+          font-size: 16px;
+        }
+        
+        /* Additional mobile keyboard prevention */
+        input:focus {
+          -webkit-user-select: none;
+          -moz-user-select: none;
+          -ms-user-select: none;
+          user-select: none;
+        }
+        
+        /* For tablets specifically */
+        @media (pointer: coarse) {
+          input {
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+          }
         }
       `}</style>
     </div>
