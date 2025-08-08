@@ -285,15 +285,101 @@ const KioskGlobe = React.memo(({
     }, 3000);
   }, []);
 
-  // Add/update pins on map
+  // Helper function to animate marker position - NEW FUNCTION FOR SMOOTH TRANSITIONS
+  const animateMarkerPosition = useCallback((marker, fromLngLat, toLngLat, duration = 800) => {
+    const startTime = performance.now();
+    const deltaLng = toLngLat[0] - fromLngLat.lng;
+    const deltaLat = toLngLat[1] - fromLngLat.lat;
+    
+    const animate = (currentTime) => {
+      const elapsed = currentTime - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      
+      // Use easeOutCubic for smooth deceleration
+      const easeProgress = 1 - Math.pow(1 - progress, 3);
+      
+      const currentLng = fromLngLat.lng + (deltaLng * easeProgress);
+      const currentLat = fromLngLat.lat + (deltaLat * easeProgress);
+      
+      marker.setLngLat([currentLng, currentLat]);
+      
+      if (progress < 1) {
+        requestAnimationFrame(animate);
+      }
+    };
+    
+    requestAnimationFrame(animate);
+  }, []);
+
+  // Helper function to update marker popup content - NEW FUNCTION
+  const updateMarkerPopup = useCallback((marker, cityPins, mainPin, latestPin) => {
+    // Remove existing popup
+    if (marker.getPopup()) {
+      marker.getPopup().remove();
+    }
+    
+    // Create new popup content
+    const popupContainer = document.createElement('div');
+    const root = createRoot(popupContainer);
+    
+    if (cityPins.length === 1) {
+      // Single pin popup
+      const pin = cityPins[0];
+      root.render(
+        React.createElement('div', { style: { fontFamily: "'Inter', sans-serif", padding: '8px' } },
+          React.createElement('h3', { 
+            style: { margin: '0 0 8px 0', fontSize: '14px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' } 
+          },
+            React.createElement(ReactCountryFlag, {
+              countryCode: pin.countryCode,
+              svg: true,
+              style: { width: '16px', height: '12px' }
+            }),
+            `${pin.cityName}, ${pin.state}`
+          ),
+          React.createElement('p', { style: { margin: '0', fontSize: '12px', color: '#666' } },
+            `📍 ${pin.userName}`,
+            React.createElement('br'),
+            `🕐 ${getTimeAgo(pin.timestamp)}`
+          )
+        )
+      );
+    } else {
+      // Multiple pins popup
+      root.render(
+        React.createElement('div', { style: { fontFamily: "'Inter', sans-serif", padding: '12px', minWidth: '200px' } },
+          React.createElement('h3', { 
+            style: { margin: '0 0 8px 0', fontSize: '16px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' } 
+          },
+            React.createElement(ReactCountryFlag, {
+              countryCode: mainPin.countryCode,
+              svg: true,
+              style: { width: '18px', height: '14px' }
+            }),
+            `${mainPin.cityName}, ${mainPin.state}`
+          ),
+          React.createElement('div', { style: { margin: '8px 0', padding: '8px', background: '#f5f5f5', borderRadius: '6px' } },
+            React.createElement('strong', { style: { color: '#dc2626', fontSize: '18px' } }, cityPins.length),
+            React.createElement('span', { style: { fontSize: '12px', color: '#666', marginLeft: '4px' } }, 'pins')
+          ),
+          React.createElement('p', { style: { margin: '4px 0 0 0', fontSize: '12px', color: '#666' } },
+            `🕐 Latest: ${latestPin.userName} (${getTimeAgo(latestPin.timestamp)})`
+          )
+        )
+      );
+    }
+
+    const popup = new mapboxgl.Popup({ offset: 25 })
+      .setDOMContent(popupContainer);
+
+    marker.setPopup(popup);
+  }, []);
+
+  // Add/update pins on map - ENHANCED WITH SMOOTH TRANSITIONS
   const updatePinsOnMap = useCallback(() => {
     if (!mapInstance.current || globalPins.length === 0) return;
 
-    console.log('📍 Adding pins to map:', globalPins.length);
-
-    // Clear existing markers
-    markersRef.current.forEach(marker => marker.remove());
-    markersRef.current.clear();
+    console.log('📍 Updating pins on map with smooth transitions:', globalPins.length);
 
     // Group pins by city for clustering
     const cityGroups = {};
@@ -305,89 +391,112 @@ const KioskGlobe = React.memo(({
       cityGroups[key].push(pin);
     });
 
-    // Add markers to map
+    // Track which markers need to be created vs updated
+    const newMarkersNeeded = new Set();
+    const existingMarkers = new Map(markersRef.current);
+
+    // First pass: identify what markers we need
     Object.values(cityGroups).forEach(cityPins => {
-      if (cityPins.length === 1) {
-        // Single pin - simple red marker
-        const pin = cityPins[0];
-        const marker = new mapboxgl.Marker({ color: '#dc2626' }) // Red color
-          .setLngLat(pin.coordinates)
-          .addTo(mapInstance.current);
+      const mainPin = cityPins[0];
+      const markerId = `${mainPin.cityName}-${mainPin.country}`;
+      newMarkersNeeded.add(markerId);
+    });
 
-        // Add popup for single pins using React component
-        const popupContainer = document.createElement('div');
-        const root = createRoot(popupContainer);
-        
-        root.render(
-          React.createElement('div', { style: { fontFamily: "'Inter', sans-serif", padding: '8px' } },
-            React.createElement('h3', { 
-              style: { margin: '0 0 8px 0', fontSize: '14px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' } 
-            },
-              React.createElement(ReactCountryFlag, {
-                countryCode: pin.countryCode,
-                svg: true,
-                style: { width: '16px', height: '12px' }
-              }),
-              `${pin.cityName}, ${pin.state}`
-            ),
-            React.createElement('p', { style: { margin: '0', fontSize: '12px', color: '#666' } },
-              `📍 ${pin.userName}`,
-              React.createElement('br'),
-              `🕐 ${getTimeAgo(pin.timestamp)}`
-            )
-          )
-        );
-
-        const popup = new mapboxgl.Popup({ offset: 25 })
-          .setDOMContent(popupContainer);
-
-        marker.setPopup(popup);
-        markersRef.current.set(pin.id, marker);
-
-      } else {
-        // Multiple pins - use representative coordinates and custom popup
-        const mainPin = cityPins[0];
-        const latestPin = cityPins.sort((a, b) => b.timestamp - a.timestamp)[0];
-        
-        const marker = new mapboxgl.Marker({ color: '#dc2626' })
-          .setLngLat(mainPin.coordinates)
-          .addTo(mapInstance.current);
-
-        // Custom popup for multiple pins using React component
-        const popupContainer = document.createElement('div');
-        const root = createRoot(popupContainer);
-        
-        root.render(
-          React.createElement('div', { style: { fontFamily: "'Inter', sans-serif", padding: '12px', minWidth: '200px' } },
-            React.createElement('h3', { 
-              style: { margin: '0 0 8px 0', fontSize: '16px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' } 
-            },
-              React.createElement(ReactCountryFlag, {
-                countryCode: mainPin.countryCode,
-                svg: true,
-                style: { width: '18px', height: '14px' }
-              }),
-              `${mainPin.cityName}, ${mainPin.state}`
-            ),
-            React.createElement('div', { style: { margin: '8px 0', padding: '8px', background: '#f5f5f5', borderRadius: '6px' } },
-              React.createElement('strong', { style: { color: '#dc2626', fontSize: '18px' } }, cityPins.length),
-              React.createElement('span', { style: { fontSize: '12px', color: '#666', marginLeft: '4px' } }, 'pins')
-            ),
-            React.createElement('p', { style: { margin: '4px 0 0 0', fontSize: '12px', color: '#666' } },
-              `🕐 Latest: ${latestPin.userName} (${getTimeAgo(latestPin.timestamp)})`
-            )
-          )
-        );
-
-        const popup = new mapboxgl.Popup({ offset: 25 })
-          .setDOMContent(popupContainer);
-
-        marker.setPopup(popup);
-        markersRef.current.set(mainPin.id, marker);
+    // Second pass: remove markers that are no longer needed
+    existingMarkers.forEach((marker, markerId) => {
+      if (!newMarkersNeeded.has(markerId)) {
+        console.log('🗑️ Removing obsolete marker:', markerId);
+        // Smooth fade out animation
+        const markerElement = marker.getElement();
+        if (markerElement) {
+          markerElement.style.transition = 'opacity 0.3s ease-out, transform 0.3s ease-out';
+          markerElement.style.opacity = '0';
+          markerElement.style.transform = 'scale(0.8)';
+          
+          setTimeout(() => {
+            marker.remove();
+            markersRef.current.delete(markerId);
+          }, 300);
+        } else {
+          marker.remove();
+          markersRef.current.delete(markerId);
+        }
       }
     });
 
-  }, [globalPins]);
+    // Third pass: create or update markers
+    Object.values(cityGroups).forEach(cityPins => {
+      const mainPin = cityPins[0];
+      const markerId = `${mainPin.cityName}-${mainPin.country}`;
+      const latestPin = cityPins.sort((a, b) => b.timestamp - a.timestamp)[0];
+      
+      let marker = markersRef.current.get(markerId);
+      
+      if (!marker) {
+        // Create new marker with smooth entrance animation
+        console.log('✨ Creating new marker with entrance animation:', markerId);
+        
+        marker = new mapboxgl.Marker({ 
+          color: '#dc2626',
+          scale: 0.8 // Start smaller for entrance animation
+        })
+          .setLngLat(mainPin.coordinates)
+          .addTo(mapInstance.current);
+
+        // Add entrance animation
+        const markerElement = marker.getElement();
+        if (markerElement) {
+          markerElement.style.transition = 'transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.3s ease-out';
+          markerElement.style.opacity = '0';
+          markerElement.style.transform = 'scale(0.3)';
+          markerElement.style.pointerEvents = 'none'; // Disable all clicks on pins
+          
+          // Trigger entrance animation
+          setTimeout(() => {
+            markerElement.style.opacity = '1';
+            markerElement.style.transform = 'scale(1)';
+          }, 50);
+        }
+
+        markersRef.current.set(markerId, marker);
+        
+      } else {
+        // Update existing marker position with smooth transition
+        console.log('📍 Updating existing marker position:', markerId);
+        
+        const currentLngLat = marker.getLngLat();
+        const newLngLat = mainPin.coordinates;
+        
+        // Only animate if position actually changed
+        if (Math.abs(currentLngLat.lng - newLngLat[0]) > 0.001 || 
+            Math.abs(currentLngLat.lat - newLngLat[1]) > 0.001) {
+          
+          console.log('🎯 Animating marker position change');
+          
+          // Add CSS transition to marker element
+          const markerElement = marker.getElement();
+          if (markerElement) {
+            markerElement.style.transition = 'transform 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+            markerElement.style.pointerEvents = 'none'; // Disable all clicks on pins
+          }
+          
+          // Animate the position change using custom animation
+          animateMarkerPosition(marker, currentLngLat, newLngLat, 800); // 800ms duration
+        } else {
+          // Even if not animating, disable clicks
+          const markerElement = marker.getElement();
+          if (markerElement) {
+            markerElement.style.pointerEvents = 'none'; // Disable all clicks on pins
+          }
+        }
+      }
+
+      // Update or create popup content (this doesn't need animation)
+      // NOTE: Popups are disabled for kiosk mode - no interactions allowed
+      // updateMarkerPopup(marker, cityPins, mainPin, latestPin);
+    });
+
+  }, [globalPins, animateMarkerPosition, updateMarkerPopup]);
 
   // Update pins when globalPins changes
   useEffect(() => {
@@ -956,6 +1065,47 @@ const KioskGlobe = React.memo(({
         @keyframes spin {
           0% { transform: rotate(0deg); }
           100% { transform: rotate(360deg); }
+        }
+        
+        .mapboxgl-marker {
+          transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) !important;
+          pointer-events: none !important; /* Disable all clicks on pins */
+          cursor: default !important;
+        }
+        
+        .mapboxgl-marker.entering {
+          animation: pinEntrance 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        
+        .mapboxgl-marker.updating {
+          animation: pinUpdate 0.4s ease-out;
+        }
+        
+        @keyframes pinEntrance {
+          0% {
+            opacity: 0;
+            transform: scale(0.3) translateY(-20px);
+          }
+          50% {
+            opacity: 0.8;
+            transform: scale(1.1) translateY(-5px);
+          }
+          100% {
+            opacity: 1;
+            transform: scale(1) translateY(0);
+          }
+        }
+        
+        @keyframes pinUpdate {
+          0% {
+            transform: scale(1);
+          }
+          50% {
+            transform: scale(1.1);
+          }
+          100% {
+            transform: scale(1);
+          }
         }
         
         @keyframes pinNotification {
