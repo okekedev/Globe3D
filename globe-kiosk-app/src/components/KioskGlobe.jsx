@@ -547,7 +547,7 @@ const KioskGlobe = React.memo(({
 
     // Show visual notification for pin addition
     showPinAddedNotification(newPin, isNewCity);
-  }, [globalPins, onMetricsUpdate, showPinAddedNotification]); // Added dependencies
+  }, [globalPins, onMetricsUpdate, showPinAddedNotification]); // Removed handleResize dependency
 
   // Smooth rotation animation - PREVENT MULTIPLE STARTS
   const startAnimation = useCallback(() => {
@@ -608,14 +608,59 @@ const KioskGlobe = React.memo(({
       console.log('🔄 Zoom-out completed, now setting zoomed state to false');
       isZoomedInRef.current = false; // NOW SET TO FALSE AFTER ZOOM COMPLETES
       
-      if (enableAutoRotation) {
-        console.log('🌀 Resuming rotation after 5-second zoom out completes');
-        setTimeout(() => {
-          startAnimation();
-        }, 500); // Small additional buffer
-      } else {
-        console.log('🚫 Auto rotation disabled');
-      }
+      // Trigger resize to adjust zoom level for current container size
+      setTimeout(() => {
+        if (mapInstance.current && mapContainer.current) {
+          console.log('🔄 Triggering resize after zoom-out to adjust zoom level');
+          const container = mapContainer.current;
+          const rightPanel = container.closest('.right-panel');
+          
+          const targetWidth = rightPanel ? rightPanel.clientWidth : container.clientWidth;
+          const targetHeight = rightPanel ? rightPanel.clientHeight : container.clientHeight;
+          
+          const baseSize = 1280;
+          const baseZoom = 2.9;
+          const currentSize = Math.min(targetWidth, targetHeight);
+          const pixelRatio = currentSize / baseSize;
+          const rawZoom = baseZoom * pixelRatio;
+          const newZoom = Math.round(rawZoom * 100) / 100;
+          
+          const currentZoom = mapInstance.current.getZoom();
+          const zoomDifference = Math.abs(currentZoom - newZoom);
+          
+          if (zoomDifference > 0.05) {
+            console.log('✅ Applying zoom adjustment after zoom-out:', { 
+              from: currentZoom, 
+              to: newZoom, 
+              difference: zoomDifference 
+            });
+            
+            mapInstance.current.resize();
+            mapInstance.current.easeTo({
+              zoom: newZoom,
+              duration: 400
+            });
+            
+            // Start rotation after zoom adjustment
+            setTimeout(() => {
+              if (enableAutoRotation) {
+                console.log('🌀 Resuming rotation after zoom adjustment');
+                startAnimation();
+              }
+            }, 500);
+          } else {
+            // No zoom adjustment needed, start rotation immediately
+            if (enableAutoRotation) {
+              console.log('🌀 Resuming rotation after 5-second zoom out completes');
+              setTimeout(() => {
+                startAnimation();
+              }, 500); // Small additional buffer
+            } else {
+              console.log('🚫 Auto rotation disabled');
+            }
+          }
+        }
+      }, 100);
     }, 6000); // 6 seconds to ensure zoom completes + buffer (CHANGED FROM 21000)
   }, [enableAutoRotation, startAnimation, stopAnimation]); // REMOVED selectedLocation DEPENDENCY
 

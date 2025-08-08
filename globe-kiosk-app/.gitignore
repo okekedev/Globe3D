@@ -7,6 +7,7 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Runtime and dependencies
 node_modules
 dist
 dist-ssr
@@ -22,3 +23,131 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Environment variables and secrets
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.*.local
+
+# API keys and sensitive config
+config/keys.js
+config/production.json
+secrets.json
+*.key
+*.pem
+
+# Build outputs and cache
+build/
+.cache/
+.parcel-cache/
+.next/
+.nuxt/
+.vuepress/dist/
+.temp/
+.tmp/
+
+# Testing
+coverage/
+*.lcov
+.nyc_output/
+test-results/
+playwright-report/
+
+# Runtime and process files
+*.pid
+*.seed
+*.pid.lock
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Optional stylelint cache
+.stylelintcache
+
+# Microbundle cache
+.rpt2_cache/
+.rts2_cache_cjs/
+.rts2_cache_es/
+.rts2_cache_umd/
+
+# Optional REPL history
+.node_repl_history
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity
+
+# DotEnv environment variables file
+.env.example
+
+# Temporary folders
+tmp/
+temp/
+
+# OS generated files
+Thumbs.db
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Desktop.ini
+
+# IDE and editor files
+*.swp
+*.swo
+*~
+.project
+.settings/
+.classpath
+.factorypath
+.buildpath
+.target
+.metadata
+.recommenders/
+*.iml
+*.ipr
+*.iws
+
+# Backup files
+*.backup
+*.bak
+*.orig
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Documentation generated files
+docs/build/
+docs/.docusaurus/
+
+# Deployment
+.vercel
+.netlify
+.firebase/
+
+# Local development
+.local/
+local/
+
+# Package manager lock files (keep package-lock.json but ignore yarn.lock if not using yarn)
+# yarn.lock
+
+# Miscellaneous
+.sass-cache/
+connect.lock
+typings/
+.awcache/
+.grunt/
+bower_components/
